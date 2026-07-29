@@ -1,0 +1,61 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+
+    'nav' => [
+        'chat' => 'ჩატი',
+    ],
+
+    'page' => [
+        'title' => 'ჩატი',
+        'heading' => 'ჩატი',
+    ],
+
+    'sidebar' => [
+        'heading' => 'კოლეგები',
+        'search' => 'კოლეგების ძებნა',
+        'empty' => 'სხვა მომხმარებელს ჯერ არ აქვს ანგარიში.',
+        'none_found' => 'ამ ძებნას კოლეგა არ შეესაბამება.',
+        'online' => 'ონლაინ',
+        'offline' => 'ოფლაინ',
+        'last_seen' => 'ბოლოს ნანახი :time',
+        'never_seen' => 'არასდროს შემოსულა',
+    ],
+
+    'conversation' => [
+        'none_selected' => 'აირჩიეთ კოლეგა საუბრის დასაწყებად.',
+        'empty' => 'ჯერ შეტყობინებები არ არის. დაიწყეთ საუბარი.',
+        'load_older' => 'ძველი შეტყობინებების ჩატვირთვა',
+        'you' => 'თქვენ',
+        'sent_at' => 'გაგზავნილია :time',
+    ],
+
+    'composer' => [
+        'placeholder' => 'დაწერეთ შეტყობინება…',
+        'send' => 'გაგზავნა',
+        'too_long' => 'შეტყობინება :max სიმბოლოზე გრძელია.',
+        'rate_limited' => 'ძალიან ბევრი შეტყობინება. სცადეთ :seconds წამში.',
+        'empty' => 'ჯერ დაწერეთ რაიმე.',
+    ],
+
+    'overlay' => [
+        'open' => 'ჩატის გახსნა',
+        'close' => 'ჩატის დახურვა',
+        'unread' => ':count წაუკითხავი',
+    ],
+
+    'errors' => [
+        'not_participant' => 'თქვენ არ ხართ ამ საუბრის მონაწილე.',
+        'missing_tables' => 'Filum-ის ცხრილები ვერ მოიძებნა. გაუშვით: php artisan vendor:publish --tag=filum-migrations && php artisan migrate',
+    ],
+
+    'install' => [
+        'published' => 'Filum-ის კონფიგურაცია და მიგრაციები გამოქვეყნდა.',
+        'next' => 'შემდეგ გაუშვით: php artisan migrate',
+        'plugin' => 'შემდეგ დაამატეთ FilumPlugin::make() თქვენს პანელის პროვაიდერში.',
+        'done' => 'Filum მზადაა.',
+    ],
+
+];
