@@ -19,7 +19,10 @@ included.
 
 - PHP 8.3+
 - Laravel 12 or 13
-- Filament 4 or 5
+- Filament 4.11.5+ or 5.6.5+
+
+The Filament floor is a security minimum, not a preference: earlier 4.x and 5.x
+releases carry published advisories, so Filum will not resolve against them.
 
 ## Installation
 
