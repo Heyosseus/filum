@@ -8,7 +8,6 @@ use Filament\Pages\Page;
 use Heyosseus\Filum\Filum;
 use Heyosseus\Filum\Messages\Messages;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Override;
 
 /**
  * Chat's home in the panel.
@@ -19,7 +18,6 @@ use Override;
  */
 final class Chat extends Page
 {
-    #[Override]
     public function getView(): string
     {
         return 'filum::pages.chat';

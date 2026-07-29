@@ -46,18 +46,25 @@ final class Compat
         return constant('Filament\View\PanelsRenderHook::BODY_END');
     }
 
-    private static function majorOf(string $package, int $fallback): int
+    /**
+     * The major in a version string, or the fallback when there is no reading it.
+     *
+     * Kept separate and public because it is the only part with a decision in it:
+     * a branch install reports something like "dev-main", which names no major at
+     * all. Both packages are hard requirements, so there is no not-installed case
+     * to guard against.
+     */
+    public static function majorFrom(?string $version, int $fallback): int
     {
-        if (! InstalledVersions::isInstalled($package)) {
-            return $fallback;
-        }
-
-        $version = InstalledVersions::getPrettyVersion($package);
-
         if (! is_string($version) || ! preg_match('/(\d+)/', $version, $matches)) {
             return $fallback;
         }
 
         return (int) $matches[1];
+    }
+
+    private static function majorOf(string $package, int $fallback): int
+    {
+        return self::majorFrom(InstalledVersions::getPrettyVersion($package), $fallback);
     }
 }

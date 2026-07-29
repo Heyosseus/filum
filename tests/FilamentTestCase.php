@@ -6,7 +6,6 @@ namespace Heyosseus\Filum\Tests;
 
 use Heyosseus\Filum\Tests\Filament\FilumTestPanelProvider;
 use Illuminate\Foundation\Application;
-use Illuminate\Support\ViewErrorBag;
 use Override;
 
 /**

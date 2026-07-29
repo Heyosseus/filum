@@ -26,6 +26,20 @@ it('names itself in the panel navigation', function (): void {
         ->and(Chat::getNavigationIcon())->toBe('heroicon-o-chat-bubble-left-right');
 });
 
+it('titles and heads itself from the translations', function (): void {
+    $page = Livewire::test(Chat::class)->instance();
+
+    expect($page->getTitle())->toBe(__('filum::filum.page.title'))
+        ->and($page->getHeading())->toBe(__('filum::filum.page.heading'))
+        ->and($page->getView())->toBe('filum::pages.chat');
+});
+
+it('titles itself in Georgian when the panel is', function (): void {
+    app()->setLocale('ka');
+
+    expect(Livewire::test(Chat::class)->instance()->getTitle())->toBe('ჩატი');
+});
+
 it('shows no badge when everything is read', function (): void {
     expect(Chat::getNavigationBadge())->toBeNull();
 });

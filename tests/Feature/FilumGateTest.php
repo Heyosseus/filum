@@ -9,7 +9,7 @@ it('admits any authenticated user by default', function (): void {
 });
 
 it('refuses nobody in particular', function (): void {
-    expect(Filum::authorized(null))->toBeFalse();
+    expect(Filum::authorized())->toBeFalse();
 });
 
 it('honours a registered gate', function (): void {
