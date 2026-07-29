@@ -1,0 +1,340 @@
+/*
+ * Filum.
+ *
+ * Every class is prefixed and every colour is drawn from Filament's own custom
+ * properties, so the chat inherits whatever palette the panel already uses
+ * instead of imposing one. Designed against dark mode and following the panel's
+ * light/dark state rather than forcing either.
+ */
+
+.filum-root {
+    --filum-gap: 0.75rem;
+    --filum-radius: 0.625rem;
+    --filum-surface: rgb(var(--gray-50, 249 250 251));
+    --filum-surface-raised: rgb(255 255 255);
+    --filum-border: rgb(var(--gray-200, 229 231 235));
+    --filum-text: rgb(var(--gray-900, 17 24 39));
+    --filum-muted: rgb(var(--gray-500, 107 114 128));
+    --filum-accent: rgb(var(--primary-600, 37 99 235));
+    --filum-accent-text: rgb(255 255 255);
+
+    color: var(--filum-text);
+    font-size: 0.875rem;
+}
+
+.dark .filum-root {
+    --filum-surface: rgb(var(--gray-900, 17 24 39));
+    --filum-surface-raised: rgb(var(--gray-800, 31 41 55));
+    --filum-border: rgb(var(--gray-700, 55 65 81));
+    --filum-text: rgb(var(--gray-100, 243 244 246));
+    --filum-muted: rgb(var(--gray-400, 156 163 175));
+    --filum-accent: rgb(var(--primary-500, 59 130 246));
+}
+
+.filum-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 16rem) minmax(0, 1fr);
+    gap: var(--filum-gap);
+    min-height: 28rem;
+    background: var(--filum-surface);
+    border: 1px solid var(--filum-border);
+    border-radius: var(--filum-radius);
+    overflow: hidden;
+}
+
+@media (max-width: 48rem) {
+    .filum-panel {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Sidebar ---------------------------------------------------------------- */
+
+.filum-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: var(--filum-gap);
+    border-right: 1px solid var(--filum-border);
+    overflow-y: auto;
+}
+
+.filum-sidebar-heading {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--filum-muted);
+}
+
+.filum-search {
+    width: 100%;
+    padding: 0.375rem 0.625rem;
+    background: var(--filum-surface-raised);
+    border: 1px solid var(--filum-border);
+    border-radius: var(--filum-radius);
+    color: inherit;
+}
+
+.filum-people {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.filum-person {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem;
+    background: transparent;
+    border: 0;
+    border-radius: var(--filum-radius);
+    color: inherit;
+    cursor: pointer;
+    text-align: start;
+}
+
+.filum-person:hover,
+.filum-person:focus-visible {
+    background: var(--filum-surface-raised);
+}
+
+.filum-person-active {
+    background: var(--filum-surface-raised);
+    font-weight: 600;
+}
+
+.filum-person-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filum-avatar {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 auto;
+    border-radius: 9999px;
+    background: var(--filum-accent);
+    color: var(--filum-accent-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+    overflow: hidden;
+}
+
+.filum-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.filum-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: 0 0 auto;
+    border-radius: 9999px;
+    background: var(--filum-muted);
+    opacity: 0.4;
+}
+
+.filum-dot-online {
+    background: rgb(34 197 94);
+    opacity: 1;
+}
+
+.filum-badge {
+    flex: 0 0 auto;
+    min-width: 1.25rem;
+    padding: 0 0.375rem;
+    border-radius: 9999px;
+    background: var(--filum-accent);
+    color: var(--filum-accent-text);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+/* Conversation ----------------------------------------------------------- */
+
+.filum-conversation {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.filum-thread {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    gap: 0.5rem;
+    padding: var(--filum-gap);
+    overflow-y: auto;
+}
+
+.filum-thread-header {
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--filum-border);
+    font-weight: 600;
+}
+
+.filum-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.filum-message {
+    max-width: min(32rem, 80%);
+    padding: 0.5rem 0.75rem;
+    background: var(--filum-surface-raised);
+    border: 1px solid var(--filum-border);
+    border-radius: var(--filum-radius);
+    align-self: flex-start;
+}
+
+.filum-message-mine {
+    align-self: flex-end;
+    background: var(--filum-accent);
+    border-color: transparent;
+    color: var(--filum-accent-text);
+}
+
+.filum-message-author {
+    display: block;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    opacity: 0.75;
+}
+
+.filum-message-body {
+    margin: 0.125rem 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.filum-message-time {
+    font-size: 0.6875rem;
+    opacity: 0.6;
+}
+
+.filum-load-older {
+    align-self: center;
+    padding: 0.25rem 0.75rem;
+    background: transparent;
+    border: 1px solid var(--filum-border);
+    border-radius: 9999px;
+    color: var(--filum-muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+/* Composer --------------------------------------------------------------- */
+
+.filum-composer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.5rem;
+    padding: var(--filum-gap);
+    border-top: 1px solid var(--filum-border);
+}
+
+.filum-input {
+    flex: 1 1 12rem;
+    min-width: 0;
+    padding: 0.5rem 0.75rem;
+    background: var(--filum-surface-raised);
+    border: 1px solid var(--filum-border);
+    border-radius: var(--filum-radius);
+    color: inherit;
+    resize: vertical;
+}
+
+.filum-send {
+    padding: 0.5rem 1rem;
+    background: var(--filum-accent);
+    border: 0;
+    border-radius: var(--filum-radius);
+    color: var(--filum-accent-text);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.filum-error {
+    flex: 1 0 100%;
+    margin: 0;
+    color: rgb(220 38 38);
+    font-size: 0.75rem;
+}
+
+.dark .filum-error {
+    color: rgb(248 113 113);
+}
+
+.filum-empty {
+    margin: auto;
+    padding: var(--filum-gap);
+    color: var(--filum-muted);
+    text-align: center;
+}
+
+/* Overlay ---------------------------------------------------------------- */
+
+.filum-mode-overlay {
+    position: fixed;
+    inset-inline-end: 1rem;
+    inset-block-end: 1rem;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.filum-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: var(--filum-accent);
+    border: 0;
+    border-radius: 9999px;
+    box-shadow: 0 6px 16px rgb(0 0 0 / 0.2);
+    color: var(--filum-accent-text);
+    cursor: pointer;
+    font-weight: 600;
+    order: 2;
+}
+
+.filum-mode-overlay .filum-panel {
+    width: min(38rem, calc(100vw - 2rem));
+    height: min(32rem, calc(100vh - 8rem));
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+    order: 1;
+}
+
+.filum-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+}
