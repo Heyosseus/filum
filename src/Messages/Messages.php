@@ -16,6 +16,7 @@ use Heyosseus\Filum\Models\Participant;
 use Illuminate\Cache\RateLimiter;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -68,7 +69,7 @@ final readonly class Messages
             Participant::query()
                 ->where('conversation_id', $conversation->id)
                 ->where('user_id', $senderId)
-                ->update(['last_read_at' => CarbonImmutable::now()]);
+                ->update(['last_read_message_id' => $message->id]);
 
             return $message;
         });
@@ -145,7 +146,15 @@ final readonly class Messages
     {
         $participant = $this->conversations->participant($conversation, $this->users->id($user));
 
-        $participant?->forceFill(['last_read_at' => CarbonImmutable::now()])->save();
+        if (! $participant instanceof Participant) {
+            return;
+        }
+
+        $newest = Message::query()->where('conversation_id', $conversation->id)->max('id');
+
+        $participant->forceFill([
+            'last_read_message_id' => is_numeric($newest) ? (int) $newest : null,
+        ])->save();
     }
 
     /**
@@ -160,15 +169,25 @@ final readonly class Messages
             return 0;
         }
 
-        $query = Message::query()
-            ->where('conversation_id', $conversation->id)
-            ->where('sender_id', '!=', $userId);
+        return $this->unreadQuery($participant->conversation_id, $userId, $participant->last_read_message_id)->count();
+    }
 
-        if ($participant->last_read_at !== null) {
-            $query->where('created_at', '>', $participant->last_read_at);
+    /**
+     * The messages in a conversation a given reader has not seen.
+     *
+     * @return Builder<Message>
+     */
+    private function unreadQuery(int $conversationId, int|string $readerId, ?int $lastReadId): Builder
+    {
+        $query = Message::query()
+            ->where('conversation_id', $conversationId)
+            ->where('sender_id', '!=', $readerId);
+
+        if ($lastReadId !== null) {
+            $query->where('id', '>', $lastReadId);
         }
 
-        return $query->count();
+        return $query;
     }
 
     /**
@@ -184,15 +203,11 @@ final readonly class Messages
             ->where('user_id', $userId)
             ->get()
             ->each(function (Participant $participant) use (&$total, $userId): void {
-                $query = Message::query()
-                    ->where('conversation_id', $participant->conversation_id)
-                    ->where('sender_id', '!=', $userId);
-
-                if ($participant->last_read_at !== null) {
-                    $query->where('created_at', '>', $participant->last_read_at);
-                }
-
-                $total += $query->count();
+                $total += $this->unreadQuery(
+                    $participant->conversation_id,
+                    $userId,
+                    $participant->last_read_message_id,
+                )->count();
             });
 
         return $total;

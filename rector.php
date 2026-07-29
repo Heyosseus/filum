@@ -22,4 +22,15 @@ return RectorConfig::configure()
     ->withRules([
         InlineConstructorDefaultToPropertyRector::class,
         AddOverrideAttributeToOverriddenMethodsRector::class,
+    ])
+    // #[Override] is a promise about a parent that Filum does not control: the
+    // same method can differ between Filament 4 and Filament 5, and the attribute
+    // turns such a difference into a fatal error rather than something Compat can
+    // absorb. So it is applied to Filum's own hierarchies and not to the classes
+    // it inherits from Filament or Livewire.
+    ->withSkip([
+        AddOverrideAttributeToOverriddenMethodsRector::class => [
+            __DIR__.'/src/Pages',
+            __DIR__.'/src/Livewire',
+        ],
     ]);

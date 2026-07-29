@@ -72,7 +72,7 @@ it('truncates a message past the configured maximum', function (): void {
 
     $message = $this->messages->send($this->conversation, $this->nino, str_repeat('a', 50));
 
-    expect(mb_strlen($message->body))->toBe(10);
+    expect(mb_strlen((string) $message->body))->toBe(10);
 });
 
 it('rate limits a sender who floods', function (): void {

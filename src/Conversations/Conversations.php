@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Heyosseus\Filum\Conversations;
 
+use Carbon\CarbonImmutable;
 use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Participant;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 final class Conversations
@@ -21,30 +21,40 @@ final class Conversations
     public function between(int|string $a, int|string $b): Conversation
     {
         $key = ConversationKey::for([$a, $b]);
+        $now = CarbonImmutable::now();
 
-        $existing = Conversation::query()->where('key', $key)->first();
+        // insertOrIgnore lets the unique index settle the race without an
+        // exception path: whoever arrives first creates the row and everyone else
+        // quietly does nothing, so two people opening each other at the same
+        // moment still end up in one conversation. Catching a duplicate-key error
+        // instead would mean re-reading a row that our own rolled-back
+        // transaction had just hidden.
+        DB::table('filum_conversations')->insertOrIgnore([
+            'key' => $key,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
 
-        if ($existing instanceof Conversation) {
-            return $existing;
-        }
+        $conversation = Conversation::query()->where('key', $key)->firstOrFail();
 
-        try {
-            return DB::transaction(function () use ($key, $a, $b): Conversation {
-                $conversation = Conversation::query()->create(['key' => $key]);
+        // Idempotent for the same reason, so re-opening a conversation adds
+        // nobody twice.
+        DB::table('filum_participants')->insertOrIgnore([
+            [
+                'conversation_id' => $conversation->id,
+                'user_id' => $a,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'conversation_id' => $conversation->id,
+                'user_id' => $b,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        ]);
 
-                foreach ([$a, $b] as $userId) {
-                    Participant::query()->create([
-                        'conversation_id' => $conversation->id,
-                        'user_id' => $userId,
-                    ]);
-                }
-
-                return $conversation;
-            });
-        } catch (QueryException) {
-            // Lost the race. The winner's row is the one we both wanted.
-            return Conversation::query()->where('key', $key)->firstOrFail();
-        }
+        return $conversation;
     }
 
     /**

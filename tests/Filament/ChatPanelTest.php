@@ -122,6 +122,21 @@ it('records presence on every tick', function (): void {
     expect(app(PresenceStore::class)->active())->toBe([$this->nino->id]);
 });
 
+it('keeps an open conversation read as new messages arrive on a tick', function (): void {
+    $conversation = app(Conversations::class)->between($this->nino->id, $this->giorgi->id);
+
+    $panel = Livewire::test(ChatPanel::class)->call('selectUser', (string) $this->giorgi->id);
+
+    app(Messages::class)->send($conversation, $this->giorgi, 'while you were looking');
+
+    expect(app(Messages::class)->unreadIn($conversation, $this->nino))->toBe(1);
+
+    // The thread is on screen, so the tick that fetches it also marks it read.
+    $panel->call('tick');
+
+    expect(app(Messages::class)->unreadIn($conversation, $this->nino))->toBe(0);
+});
+
 it('walks backwards through a long thread', function (): void {
     config()->set('filum.messages.rate_limit', 0);
     config()->set('filum.messages.per_page', 5);

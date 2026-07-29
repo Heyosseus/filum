@@ -15,7 +15,6 @@ function filumKeys(string $locale): array
     $keys = array_keys(Arr::dot($translations));
     sort($keys);
 
-    /** @var list<string> */
     return $keys;
 }
 

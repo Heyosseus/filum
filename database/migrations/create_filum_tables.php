@@ -35,7 +35,11 @@ return new class extends Migration
 
             // Per-participant read state, which is what gives unread counts
             // without a row per message per reader.
-            $table->timestamp('last_read_at')->nullable();
+            //
+            // A message id rather than a timestamp: timestamps are stored to the
+            // second, so a message arriving in the same second as a read would be
+            // counted as already read. Ids are monotonic and have no such gap.
+            $table->unsignedBigInteger('last_read_message_id')->nullable();
 
             $table->timestamps();
 
@@ -73,7 +77,7 @@ return new class extends Migration
      * The application's user model, so that foreignIdFor derives the right key
      * type -- integer, UUID or ULID -- without Filum having to care which.
      *
-     * @return class-string<\Illuminate\Database\Eloquent\Model>
+     * @return class-string<Illuminate\Database\Eloquent\Model>
      */
     private function userModel(): string
     {
@@ -83,7 +87,7 @@ return new class extends Migration
             throw new RuntimeException('filum.users.model must name an Eloquent model class.');
         }
 
-        /** @var class-string<\Illuminate\Database\Eloquent\Model> $model */
+        /** @var class-string<Illuminate\Database\Eloquent\Model> $model */
         return $model;
     }
 };

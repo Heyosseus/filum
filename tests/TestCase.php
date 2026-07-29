@@ -48,6 +48,11 @@ abstract class TestCase extends Orchestra
         $config = $app->make(Repository::class);
 
         $config->set('database.default', 'testing');
+
+        // SQLite leaves foreign keys off unless asked. Without this the cascade
+        // deletes in Filum's schema would silently do nothing under test while
+        // working in production -- the tests would be weaker than the database.
+        $config->set('database.connections.testing.foreign_key_constraints', true);
         $config->set('filum.users.model', User::class);
 
         // No broadcaster by default: the install Filum promises to work in.

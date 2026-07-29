@@ -7,6 +7,7 @@ namespace Heyosseus\Filum;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentView;
+use Heyosseus\Filum\Console\Commands\InstallCommand;
 use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
@@ -73,6 +74,8 @@ final class FilumServiceProvider extends ServiceProvider
         $this->registerAssets();
 
         if ($this->app->runningInConsole()) {
+            $this->commands([InstallCommand::class]);
+
             $this->publishes([
                 __DIR__.'/../config/filum.php' => $this->app->configPath('filum.php'),
             ], 'filum-config');
@@ -116,11 +119,7 @@ final class FilumServiceProvider extends ServiceProvider
      */
     private function registerOverlay(): void
     {
-        if (! class_exists(FilamentView::class)) {
-            return;
-        }
-
-        if ((bool) $this->app->make(Repository::class)->get('filum.overlay.enabled', true) !== true) {
+        if (! (bool) $this->app->make(Repository::class)->get('filum.overlay.enabled', true)) {
             return;
         }
 
@@ -134,13 +133,13 @@ final class FilumServiceProvider extends ServiceProvider
 
     /**
      * Filum's stylesheet, shipped compiled so consumers run no build step.
+     *
+     * No class_exists guard around Filament here or in registerOverlay: Filament
+     * is a hard requirement, so an install without it cannot happen, and a guard
+     * against it would be a branch no test could ever enter.
      */
     private function registerAssets(): void
     {
-        if (! class_exists(FilamentAsset::class)) {
-            return;
-        }
-
         FilamentAsset::register([
             Css::make('filum', __DIR__.'/../resources/dist/filum.css'),
         ], 'heyosseus/filum');

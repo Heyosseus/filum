@@ -7,13 +7,16 @@ namespace Heyosseus\Filum\Livewire;
 use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
+use Heyosseus\Filum\Conversations\ConversationKey;
 use Heyosseus\Filum\Conversations\Conversations;
 use Heyosseus\Filum\Exceptions\RateLimited;
 use Heyosseus\Filum\Filum;
 use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
+use Heyosseus\Filum\Models\Message;
 use Heyosseus\Filum\Presence\Heartbeat;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
@@ -56,7 +59,10 @@ final class ChatPanel extends Component
     {
         $user = $this->user();
 
-        return view('filum::livewire.chat-panel', [
+        // Resolved through the factory rather than the view() helper: a package's
+        // namespaced views are registered at runtime, so static analysis cannot
+        // know 'filum::…' is a real view-string, and the factory takes a plain one.
+        return app(Factory::class)->make('filum::livewire.chat-panel', [
             'me' => $user,
             'colleagues' => $user instanceof Authenticatable ? $this->colleagues($user) : collect(),
             'thread' => $this->thread(),
@@ -127,7 +133,7 @@ final class ChatPanel extends Component
         $thread = $this->thread();
 
         if ($thread->isNotEmpty()) {
-            $this->oldest = $thread->first()?->id;
+            $this->oldest = $thread->first()->id;
         }
     }
 
@@ -163,18 +169,17 @@ final class ChatPanel extends Component
         $users = app(UserProvider::class);
         $active = app(PresenceStore::class)->active();
         $messages = app(Messages::class);
-        $conversations = app(Conversations::class);
 
         $search = mb_strtolower(trim($this->search));
 
         return $users->chattable($me)
-            ->map(function (Authenticatable $colleague) use ($users, $active, $messages, $conversations, $me): array {
+            ->map(function (Authenticatable $colleague) use ($users, $active, $messages, $me): array {
                 $id = $users->id($colleague);
 
                 // Reading the unread count needs the conversation, but listing a
                 // colleague must never create one -- otherwise merely opening the
                 // sidebar would write a row per person.
-                $key = \Heyosseus\Filum\Conversations\ConversationKey::for([$users->id($me), $id]);
+                $key = ConversationKey::for([$users->id($me), $id]);
                 $conversation = Conversation::query()->where('key', $key)->first();
 
                 return [
@@ -194,7 +199,7 @@ final class ChatPanel extends Component
     /**
      * The messages on screen.
      *
-     * @return Collection<int, \Heyosseus\Filum\Models\Message>
+     * @return Collection<int, Message>
      */
     private function thread(): Collection
     {

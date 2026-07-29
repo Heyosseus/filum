@@ -12,14 +12,14 @@ use Override;
  * @property int $id
  * @property int $conversation_id
  * @property int|string $user_id
- * @property \Carbon\CarbonInterface|null $last_read_at
+ * @property int|null $last_read_message_id
  */
 final class Participant extends Model
 {
     protected $table = 'filum_participants';
 
     /** @var list<string> */
-    protected $fillable = ['conversation_id', 'user_id', 'last_read_at'];
+    protected $fillable = ['conversation_id', 'user_id', 'last_read_message_id'];
 
     /**
      * @return BelongsTo<Conversation, $this>
@@ -36,7 +36,7 @@ final class Participant extends Model
     protected function casts(): array
     {
         return [
-            'last_read_at' => 'datetime',
+            'last_read_message_id' => 'integer',
         ];
     }
 }
