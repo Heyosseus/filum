@@ -46,6 +46,7 @@ return [
 
     'notification' => [
         'open' => 'Open chat',
+        'invited_body' => 'Invited you to :group',
     ],
 
     'overlay' => [

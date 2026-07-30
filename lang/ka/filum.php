@@ -46,6 +46,7 @@ return [
 
     'notification' => [
         'open' => 'ჩათის გახსნა',
+        'invited_body' => 'მოგიწვიათ ჯგუფში :group',
     ],
 
     'overlay' => [

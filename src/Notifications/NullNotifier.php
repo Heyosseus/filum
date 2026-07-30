@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Heyosseus\Filum\Notifications;
 
 use Heyosseus\Filum\Contracts\Notifier;
+use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
 use Illuminate\Contracts\Auth\Authenticatable;
 
@@ -17,6 +18,11 @@ use Illuminate\Contracts\Auth\Authenticatable;
 final readonly class NullNotifier implements Notifier
 {
     public function messageSent(Message $message, Authenticatable $recipient): void
+    {
+        //
+    }
+
+    public function invited(Conversation $group, Authenticatable $recipient, Authenticatable $inviter): void
     {
         //
     }

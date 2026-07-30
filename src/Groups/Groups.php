@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Heyosseus\Filum\Groups;
 
 use Carbon\CarbonImmutable;
+use Heyosseus\Filum\Contracts\Notifier;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Exceptions\AlreadyInvited;
 use Heyosseus\Filum\Exceptions\NotAGroup;
@@ -19,6 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Group conversations and the invitations into them.
@@ -34,6 +37,8 @@ final readonly class Groups
     public function __construct(
         private UserProvider $users,
         private Repository $config,
+        private Notifier $notifier,
+        private LoggerInterface $logger,
     ) {}
 
     public function create(Authenticatable $owner, string $name): Conversation
@@ -91,15 +96,37 @@ final readonly class Groups
         if ($existing instanceof Participant) {
             $existing->forceFill(['state' => 'invited', 'invited_by_id' => $invitedBy])->save();
 
-            return $existing;
+            $participant = $existing;
+        } else {
+            $participant = Participant::query()->create([
+                'conversation_id' => $group->id,
+                'user_id' => $userId,
+                'state' => 'invited',
+                'invited_by_id' => $invitedBy,
+            ]);
         }
 
-        return Participant::query()->create([
-            'conversation_id' => $group->id,
-            'user_id' => $userId,
-            'state' => 'invited',
-            'invited_by_id' => $invitedBy,
-        ]);
+        $this->announce($group, $userId, $actor);
+
+        return $participant;
+    }
+
+    /**
+     * Guarded here rather than inside the notifier: Notifier is a public
+     * contract, and a bug in somebody's own implementation must not cost the
+     * invitation that has already been written.
+     */
+    private function announce(Conversation $group, int|string $userId, Authenticatable $inviter): void
+    {
+        try {
+            $recipient = $this->users->find((string) $userId);
+
+            if ($recipient instanceof Authenticatable) {
+                $this->notifier->invited($group, $recipient, $inviter);
+            }
+        } catch (Throwable $e) {
+            $this->logger->warning('Filum could not notify an invited user.', ['exception' => $e]);
+        }
     }
 
     public function accept(Conversation $group, Authenticatable $user): void

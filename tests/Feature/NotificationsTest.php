@@ -77,6 +77,12 @@ it('stays quiet when notifications are switched off', function (): void {
 
     expect(bell($this->giorgi->id))->toBeEmpty()
         ->and(Message::query()->count())->toBe(1);
+
+    $group = app(Heyosseus\Filum\Groups\Groups::class)->create($this->nino, 'Couriers');
+    app(Heyosseus\Filum\Groups\Groups::class)->invite($group, $this->nino, $this->giorgi->id);
+
+    expect(bell($this->giorgi->id))->toBeEmpty()
+        ->and($group->participants()->where('user_id', $this->giorgi->id)->exists())->toBeTrue();
 });
 
 it('resolves the database notifier when notifications are on', function (): void {
@@ -111,11 +117,56 @@ it('keeps the message when a notifier throws', function (): void {
         {
             throw new RuntimeException('the pager exploded');
         }
+
+        public function invited(Heyosseus\Filum\Models\Conversation $group, Authenticatable $recipient, Authenticatable $inviter): void {}
     });
 
     app(Messages::class)->send($this->conversation, $this->nino, 'sent regardless');
 
     expect(Message::query()->count())->toBe(1);
+
+    Log::shouldHaveReceived('warning')->once();
+});
+
+it('rings the bell for someone invited to a group', function (): void {
+    $group = app(Heyosseus\Filum\Groups\Groups::class)->create($this->nino, 'Couriers');
+
+    app(Heyosseus\Filum\Groups\Groups::class)->invite($group, $this->nino, $this->giorgi->id);
+
+    $notification = bell($this->giorgi->id)[0];
+
+    expect($notification['title'])->toBe('Nino')
+        ->and($notification['body'])->toBe(__('filum::filum.notification.invited_body', ['group' => 'Couriers']));
+});
+
+it('keeps the invitation when the bell cannot be rung', function (): void {
+    Schema::drop('notifications');
+
+    $group = app(Heyosseus\Filum\Groups\Groups::class)->create($this->nino, 'Couriers');
+    app(Heyosseus\Filum\Groups\Groups::class)->invite($group, $this->nino, $this->giorgi->id);
+
+    // The invitation is the thing that matters; the bell is a courtesy.
+    expect($group->participants()->where('user_id', $this->giorgi->id)->exists())->toBeTrue();
+});
+
+it('keeps the invitation when a notifier throws', function (): void {
+    Log::spy();
+
+    app()->instance(Notifier::class, new class implements Notifier
+    {
+        public function messageSent(Message $message, Authenticatable $recipient): void {}
+
+        public function invited(Heyosseus\Filum\Models\Conversation $group, Authenticatable $recipient, Authenticatable $inviter): void
+        {
+            throw new RuntimeException('the pager exploded');
+        }
+    });
+
+    $groups = app(Heyosseus\Filum\Groups\Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+
+    expect($group->participants()->where('user_id', $this->giorgi->id)->exists())->toBeTrue();
 
     Log::shouldHaveReceived('warning')->once();
 });
