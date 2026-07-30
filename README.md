@@ -1,5 +1,10 @@
 # Filum
 
+[![Latest version](https://img.shields.io/packagist/v/heyosseus/filum.svg?style=flat-square&label=packagist)](https://packagist.org/packages/heyosseus/filum)
+[![Tests](https://img.shields.io/github/actions/workflow/status/Heyosseus/filum/tests.yml?branch=main&style=flat-square&label=tests)](https://github.com/Heyosseus/filum/actions/workflows/tests.yml)
+[![Downloads](https://img.shields.io/packagist/dt/heyosseus/filum.svg?style=flat-square&label=downloads)](https://packagist.org/packages/heyosseus/filum)
+[![License](https://img.shields.io/packagist/l/heyosseus/filum.svg?style=flat-square&label=license)](LICENSE.md)
+
 Real-time chat between admin users, inside your Filament panel.
 
 Click a colleague in the sidebar, the conversation opens, history persists, and
