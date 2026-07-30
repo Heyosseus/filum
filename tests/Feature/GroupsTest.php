@@ -58,3 +58,100 @@ it('refuses to create a group when groups are switched off', function (): void {
 
     $this->groups->create($this->nino, 'Couriers');
 })->throws(NotAGroup::class);
+
+it('invites a colleague as pending, not as a member', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $participant = $this->groups->invite($group, $this->nino, $this->giorgi->id);
+
+    expect($participant->state)->toBe('invited')
+        ->and($participant->invited_by_id)->toBe($this->nino->id)
+        ->and($participant->joined_at)->toBeNull()
+        ->and($group->includes($this->giorgi->id))->toBeFalse();
+});
+
+it('lets any member invite, not only the owner', function (): void {
+    $dato = $this->user('Dato');
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+    $this->groups->accept($group, $this->giorgi);
+
+    $this->groups->invite($group, $this->giorgi, $dato->id);
+
+    expect($group->fresh()?->participants()->where('user_id', $dato->id)->exists())->toBeTrue();
+});
+
+it('refuses an invitation from someone outside the group', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $this->groups->invite($group, $this->giorgi, $this->user('Dato')->id);
+})->throws(Heyosseus\Filum\Exceptions\NotAParticipant::class);
+
+it('refuses to invite someone already invited', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+})->throws(Heyosseus\Filum\Exceptions\AlreadyInvited::class);
+
+it('refuses to invite someone already joined', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $this->groups->invite($group, $this->nino, $this->nino->id);
+})->throws(Heyosseus\Filum\Exceptions\AlreadyInvited::class);
+
+it('joins the group on accepting', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+
+    $this->groups->accept($group, $this->giorgi);
+
+    expect($group->includes($this->giorgi->id))->toBeTrue();
+
+    $row = $group->participants()->where('user_id', $this->giorgi->id)->first();
+
+    expect($row?->state)->toBe('joined')
+        ->and($row?->joined_at)->not->toBeNull();
+});
+
+it('lands a declined invitation on the same state as leaving', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+
+    $this->groups->decline($group, $this->giorgi);
+
+    $row = $group->participants()->where('user_id', $this->giorgi->id)->first();
+
+    expect($row?->state)->toBe('left')
+        ->and($group->includes($this->giorgi->id))->toBeFalse();
+});
+
+it('refuses to accept without a pending invitation', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $this->groups->accept($group, $this->giorgi);
+})->throws(Heyosseus\Filum\Exceptions\NotInvited::class);
+
+it('refuses to decline without a pending invitation', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $this->groups->decline($group, $this->giorgi);
+})->throws(Heyosseus\Filum\Exceptions\NotInvited::class);
+
+it('re-invites someone who left, resuming where they had read to', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+    $this->groups->accept($group, $this->giorgi);
+
+    // Put them in the terminal state directly: leave() arrives in Task 4, and this
+    // test is about what a re-invite does to an existing row, not how it got there.
+    $group->participants()
+        ->where('user_id', $this->giorgi->id)
+        ->update(['state' => 'left', 'last_read_message_id' => 7]);
+
+    $again = $this->groups->invite($group, $this->nino, $this->giorgi->id);
+
+    expect($again->state)->toBe('invited')
+        ->and($again->last_read_message_id)->toBe(7);
+});

@@ -6,7 +6,10 @@ namespace Heyosseus\Filum\Groups;
 
 use Carbon\CarbonImmutable;
 use Heyosseus\Filum\Contracts\UserProvider;
+use Heyosseus\Filum\Exceptions\AlreadyInvited;
 use Heyosseus\Filum\Exceptions\NotAGroup;
+use Heyosseus\Filum\Exceptions\NotAParticipant;
+use Heyosseus\Filum\Exceptions\NotInvited;
 use Heyosseus\Filum\Exceptions\NotTheOwner;
 use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Participant;
@@ -63,6 +66,85 @@ final readonly class Groups
     /**
      * Trim and bound a name. An unnamed group is not a group.
      */
+    /**
+     * Invite a colleague. Pending until they accept, so nobody is silently
+     * subscribed to a conversation they never agreed to join.
+     */
+    public function invite(Conversation $group, Authenticatable $actor, int|string $userId): Participant
+    {
+        $this->assertGroup($group);
+        $this->assertMember($group, $actor);
+
+        $existing = $this->row($group, $userId);
+
+        if ($existing instanceof Participant && $existing->state !== 'left') {
+            throw AlreadyInvited::of($group->id);
+        }
+
+        $invitedBy = $this->users->id($actor);
+
+        // Someone who left keeps their row, and with it the message they had read
+        // up to, so a re-invite resumes rather than replaying the whole thread.
+        if ($existing instanceof Participant) {
+            $existing->forceFill(['state' => 'invited', 'invited_by_id' => $invitedBy])->save();
+
+            return $existing;
+        }
+
+        return Participant::query()->create([
+            'conversation_id' => $group->id,
+            'user_id' => $userId,
+            'state' => 'invited',
+            'invited_by_id' => $invitedBy,
+        ]);
+    }
+
+    public function accept(Conversation $group, Authenticatable $user): void
+    {
+        $this->pending($group, $user)
+            ->forceFill(['state' => 'joined', 'joined_at' => CarbonImmutable::now()])
+            ->save();
+    }
+
+    public function decline(Conversation $group, Authenticatable $user): void
+    {
+        // The same terminal state as leaving: a separate 'declined' would behave
+        // identically everywhere and only add a branch.
+        $this->pending($group, $user)->forceFill(['state' => 'left'])->save();
+    }
+
+    private function pending(Conversation $group, Authenticatable $user): Participant
+    {
+        $this->assertGroup($group);
+
+        $row = $this->row($group, $this->users->id($user));
+
+        if (! $row instanceof Participant || $row->state !== 'invited') {
+            throw NotInvited::of($group->id);
+        }
+
+        return $row;
+    }
+
+    private function assertMember(Conversation $group, Authenticatable $actor): void
+    {
+        if (! $group->includes($this->users->id($actor))) {
+            throw NotAParticipant::of($group->id);
+        }
+    }
+
+    /**
+     * A participant row in any state, which is what the lifecycle needs and what
+     * Conversations::participant deliberately will not give it.
+     */
+    private function row(Conversation $group, int|string $userId): ?Participant
+    {
+        return Participant::query()
+            ->where('conversation_id', $group->id)
+            ->where('user_id', $userId)
+            ->first();
+    }
+
     private function clean(string $name): string
     {
         $name = trim($name);
