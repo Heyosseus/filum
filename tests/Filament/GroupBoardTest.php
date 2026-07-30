@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Heyosseus\Filum\Groups\Groups;
 use Heyosseus\Filum\Livewire\ChatPanel;
+use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
 use Livewire\Livewire;
 
@@ -161,19 +162,79 @@ it('refuses to delete a group it does not own, without throwing', function (): v
     expect(Conversation::query()->find($group->id))->not->toBeNull();
 });
 
-it('does nothing with the group actions in a group it has not joined', function (): void {
+it('shows nothing of a thread it was never in, even with the id set directly', function (): void {
     $group = app(Groups::class)->create($this->giorgi, 'Theirs');
+    app(Messages::class)->send($group, $this->giorgi, 'the float is under the till');
 
-    // Set straight onto the public property, which is the browser-reachable path
-    // selectConversation's membership check does not cover.
     Livewire::test(ChatPanel::class)
+        // Straight onto the public property. The browser can do exactly this, and
+        // it is the one path selectConversation's own check never sees.
         ->set('conversation', $group->id)
+        // The whole point of the test: existence is not permission, and a forged
+        // id must not put somebody else's messages into the response.
+        ->assertDontSee('the float is under the till')
+        ->assertDontSee('Theirs')
+        ->assertDontSee(__('filum::filum.sidebar.leave_group'))
+        // The board stands in, exactly as if nothing were open.
+        ->assertSee(__('filum::filum.conversation.none_selected'))
+        // And nothing done from that forged id takes effect either.
         ->call('inviteToGroup', (string) $this->giorgi->id)
         ->call('leaveGroup')
+        ->call('deleteGroup')
         ->assertHasNoErrors();
 
     expect($group->participants()->count())->toBe(1)
-        ->and($group->fresh()?->includes($this->giorgi->id))->toBeTrue();
+        ->and(Conversation::query()->find($group->id))->not->toBeNull();
+});
+
+it('shows a thread it is in when the id is set the same direct way', function (): void {
+    $groups = app(Groups::class);
+    $group = $groups->create($this->giorgi, 'Couriers');
+    $groups->invite($group, $this->giorgi, $this->nino->id);
+    $groups->accept($group, $this->nino);
+    app(Messages::class)->send($group, $this->giorgi, 'shift starts at six');
+
+    // The control for the test above. Without it that one would pass just as well
+    // against a component that renders nothing whenever the property is set
+    // directly, and would prove nothing about membership.
+    Livewire::test(ChatPanel::class)
+        ->set('conversation', $group->id)
+        ->assertSee('shift starts at six')
+        ->assertSee('Couriers')
+        ->assertSee(__('filum::filum.sidebar.leave_group'));
+});
+
+it('lets an open thread fall away when the group is deleted underneath it', function (): void {
+    $group = app(Groups::class)->create($this->nino, 'Couriers');
+    app(Messages::class)->send($group, $this->nino, 'shift starts at six');
+
+    $panel = Livewire::test(ChatPanel::class)->call('selectConversation', $group->id);
+
+    // Deleted behind the component's back: by the owner in another tab, or by a
+    // console command. The id is still sitting in this component's state, and the
+    // conversation is re-read every call precisely so that stops mattering.
+    $group->delete();
+
+    $panel->call('tick')
+        ->assertDontSee('shift starts at six')
+        ->assertSee(__('filum::filum.conversation.none_selected'));
+});
+
+it('keeps an open group readable when groups are switched off underneath it', function (): void {
+    $group = app(Groups::class)->create($this->nino, 'Couriers');
+    app(Messages::class)->send($group, $this->nino, 'shift starts at six');
+
+    // Switching groups off hides the board section and refuses new groups, but
+    // somebody already joined is still joined. The member count is read off the
+    // board, which no longer lists the group, so it reads as none rather than
+    // going back to the database for a second opinion.
+    config()->set('filum.groups.enabled', false);
+
+    Livewire::test(ChatPanel::class)
+        ->set('conversation', $group->id)
+        ->assertSee('shift starts at six')
+        ->assertDontSee(__('filum::filum.sidebar.groups'))
+        ->assertSee('0 members');
 });
 
 it('creates nothing for a viewer it will not admit', function (): void {

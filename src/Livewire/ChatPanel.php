@@ -549,7 +549,24 @@ final class ChatPanel extends Component
     }
 
     /**
-     * The open conversation, re-read each call so a deleted group falls away.
+     * The open conversation, re-read each call so a deleted group falls away --
+     * and only if the viewer is actually in it.
+     *
+     * $conversation is a public Livewire property, so the browser can set it to any
+     * integer it likes. Existence is not permission: without the membership check
+     * a forged id would render somebody else's thread, message bodies and all,
+     * into the response. Guarding it here rather than at each caller is the point,
+     * because every read goes through this one seam -- thread(), hasOlder(),
+     * partner(), render()'s group, send(), received(), tick(), the fingerprint and
+     * all three owner actions -- and a seam is the only place a check cannot be
+     * forgotten.
+     *
+     * selectConversation() keeps its own identical check: that one stops a bad id
+     * from ever being stored, this one stops a stored bad id from being read, and
+     * neither depends on the other being right.
+     *
+     * Null rather than an exception, like everything else here: a stale id from an
+     * old page is turned away in silence.
      */
     private function conversation(): ?Conversation
     {
@@ -557,9 +574,17 @@ final class ChatPanel extends Component
             return null;
         }
 
+        $me = $this->user();
         $conversation = Conversation::query()->find($this->conversation);
 
-        return $conversation instanceof Conversation ? $conversation : null;
+        if (! $conversation instanceof Conversation || ! $me instanceof Authenticatable) {
+            return null;
+        }
+
+        // Joined, not merely present as a row: the same narrowing Conversation
+        // ::includes applies for broadcast authorization and the send path, so a
+        // pending invitee cannot read a thread they have not accepted either.
+        return $conversation->includes(app(UserProvider::class)->id($me)) ? $conversation : null;
     }
 
     private function user(): ?Authenticatable
