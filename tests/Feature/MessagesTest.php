@@ -95,7 +95,7 @@ it('does not rate limit when the limit is switched off', function (): void {
     expect(Message::query()->count())->toBe(25);
 });
 
-it('pages backwards through a long thread by keyset', function (): void {
+it('opens on the newest page and grows backwards without dropping anything', function (): void {
     config()->set('filum.messages.rate_limit', 0);
     config()->set('filum.messages.per_page', 10);
 
@@ -109,10 +109,33 @@ it('pages backwards through a long thread by keyset', function (): void {
         ->and($newest->first()?->body)->toBe('message 16')
         ->and($newest->last()?->body)->toBe('message 25');
 
-    $older = $this->messages->page($this->conversation, $newest->first()?->id);
+    $floor = $this->messages->floorBefore($this->conversation, (int) $newest->first()?->id);
+    $grown = $this->messages->page($this->conversation, $floor);
 
-    expect($older)->toHaveCount(10)
-        ->and($older->last()?->body)->toBe('message 15');
+    // Twenty, not ten: the earlier page is added to what was already on screen,
+    // and the newest message is still the last one.
+    expect($grown)->toHaveCount(20)
+        ->and($grown->first()?->body)->toBe('message 6')
+        ->and($grown->last()?->body)->toBe('message 25');
+
+    $floor = $this->messages->floorBefore($this->conversation, (int) $grown->first()?->id);
+
+    expect($this->messages->page($this->conversation, $floor))->toHaveCount(25);
+});
+
+it('reports the start of a conversation rather than paging past it', function (): void {
+    config()->set('filum.messages.rate_limit', 0);
+    config()->set('filum.messages.per_page', 10);
+
+    $first = $this->messages->send($this->conversation, $this->nino, 'the first thing said');
+
+    expect($this->messages->hasOlderThan($this->conversation, $first->id))->toBeFalse()
+        ->and($this->messages->floorBefore($this->conversation, $first->id))->toBeNull();
+
+    $second = $this->messages->send($this->conversation, $this->nino, 'the second');
+
+    expect($this->messages->hasOlderThan($this->conversation, $second->id))->toBeTrue()
+        ->and($this->messages->floorBefore($this->conversation, $second->id))->toBe($first->id);
 });
 
 it('finds only what arrived after a given message', function (): void {

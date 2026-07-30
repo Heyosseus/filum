@@ -145,29 +145,64 @@ final readonly class Messages
     }
 
     /**
-     * A page of messages, oldest first, ending at the newest.
+     * The thread on screen, oldest first, always ending at the newest message.
      *
-     * Passing the id of the oldest message already on screen walks backwards
-     * through the thread by keyset rather than by offset, so scrollback stays
-     * cheap however long the conversation gets.
+     * $from is the oldest message to include, and it only ever moves backwards --
+     * so scrolling back *adds* to what is on screen instead of replacing it. That
+     * distinction is the whole feature: a reader who wants the earlier part of a
+     * conversation wants more context, not a different window onto it.
      *
      * @return Collection<int, Message>
      */
-    public function page(Conversation $conversation, ?int $before = null): Collection
+    public function page(Conversation $conversation, ?int $from = null): Collection
     {
         $query = Message::query()
             ->where('conversation_id', $conversation->id)
-            ->orderByDesc('id')
-            ->limit($this->perPage());
+            ->orderByDesc('id');
 
-        if ($before !== null) {
-            $query->where('id', '<', $before);
+        if ($from === null) {
+            $query->limit($this->perPage());
+        } else {
+            $query->where('id', '>=', $from);
         }
 
         /** @var Collection<int, Message> $messages */
         $messages = $query->get()->reverse()->values();
 
         return $messages;
+    }
+
+    /**
+     * The next floor to page back to: the oldest message of the page preceding
+     * $before, or null when $before is already the start of the conversation.
+     *
+     * By keyset rather than offset -- the ids of one page are read straight off
+     * the (conversation_id, id) index, so the cost of stepping back does not grow
+     * with how far back you have already stepped.
+     */
+    public function floorBefore(Conversation $conversation, int $before): ?int
+    {
+        $oldest = Message::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('id', '<', $before)
+            ->orderByDesc('id')
+            ->limit($this->perPage())
+            ->pluck('id')
+            ->min();
+
+        return is_numeric($oldest) ? (int) $oldest : null;
+    }
+
+    /**
+     * Whether anything precedes the given message, so the interface can offer to
+     * fetch earlier ones only when there are earlier ones.
+     */
+    public function hasOlderThan(Conversation $conversation, int $id): bool
+    {
+        return Message::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('id', '<', $id)
+            ->exists();
     }
 
     /**

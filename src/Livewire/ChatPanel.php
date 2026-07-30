@@ -47,8 +47,22 @@ final class ChatPanel extends Component
 
     public string $search = '';
 
-    /** The oldest message on screen, for keyset scrollback. */
-    public ?int $oldest = null;
+    /**
+     * The oldest message to show, for scrollback. Null means the newest page.
+     *
+     * It only ever moves backwards, so loading earlier messages grows the thread
+     * rather than sliding a window along it.
+     */
+    public ?int $from = null;
+
+    /**
+     * A fingerprint of everything the last render actually showed.
+     *
+     * Carried in the component's own state because a Livewire component is built
+     * afresh for every request: without it, a tick has nothing to compare against
+     * and cannot tell a quiet poll from a real change.
+     */
+    public string $seen = '';
 
     public function mount(string $mode = 'page'): void
     {
@@ -58,6 +72,13 @@ final class ChatPanel extends Component
     public function render(): View
     {
         $user = $this->user();
+        $thread = $this->thread();
+
+        $descriptor = app(Transport::class)->descriptor();
+
+        // Recorded on the way out, so a tick always compares against what is
+        // genuinely on screen rather than against a guess made somewhere else.
+        $this->seen = $this->fingerprint();
 
         // Resolved through the factory rather than the view() helper: a package's
         // namespaced views are registered at runtime, so static analysis cannot
@@ -65,9 +86,12 @@ final class ChatPanel extends Component
         return app(Factory::class)->make('filum::livewire.chat-panel', [
             'me' => $user,
             'colleagues' => $user instanceof Authenticatable ? $this->colleagues($user) : collect(),
-            'thread' => $this->thread(),
+            'thread' => $thread,
             'partner' => $this->partner(),
-            'poll' => $this->pollInterval(),
+            'poll' => $descriptor['poll'],
+            'driver' => $descriptor['driver'],
+            'conversationId' => $this->conversation()?->id,
+            'hasOlder' => $this->hasOlder($thread),
         ]);
     }
 
@@ -77,9 +101,8 @@ final class ChatPanel extends Component
     public function selectUser(string $id): void
     {
         $this->selected = $id;
-        $this->oldest = null;
-        $this->body = '';
-        $this->resetErrorBag();
+        $this->from = null;
+        $this->clearComposer();
 
         $conversation = $this->conversation();
         $me = $this->user();
@@ -98,9 +121,8 @@ final class ChatPanel extends Component
     public function deselect(): void
     {
         $this->selected = null;
-        $this->oldest = null;
-        $this->body = '';
-        $this->resetErrorBag();
+        $this->from = null;
+        $this->clearComposer();
     }
 
     public function toggle(): void
@@ -136,19 +158,56 @@ final class ChatPanel extends Component
             return;
         }
 
-        $this->body = '';
+        $this->clearComposer();
     }
 
     /**
-     * Walk further back through the thread.
+     * Empty the composer, on the server and in the browser.
+     *
+     * The textarea is deliberately not re-rendered by Livewire -- see the comment
+     * in the composer partial -- so emptying the property is not enough on its
+     * own: the browser has to be told, and only when a send actually succeeded.
+     */
+    private function clearComposer(): void
+    {
+        $this->body = '';
+        $this->resetErrorBag();
+        $this->dispatch('filum-composer-cleared');
+    }
+
+    /**
+     * Reach one page further back, keeping everything already on screen.
      */
     public function loadOlder(): void
     {
+        $conversation = $this->conversation();
         $thread = $this->thread();
 
-        if ($thread->isNotEmpty()) {
-            $this->oldest = $thread->first()->id;
+        if (! $conversation instanceof Conversation || $thread->isEmpty()) {
+            return;
         }
+
+        $floor = app(Messages::class)->floorBefore($conversation, $thread->first()->id);
+
+        if ($floor !== null) {
+            $this->from = $floor;
+        }
+    }
+
+    /**
+     * Whether to offer earlier messages: only when there are earlier messages.
+     *
+     * @param  Collection<int, Message>  $thread
+     */
+    private function hasOlder(Collection $thread): bool
+    {
+        $conversation = $this->conversation();
+
+        if (! $conversation instanceof Conversation || $thread->isEmpty()) {
+            return false;
+        }
+
+        return app(Messages::class)->hasOlderThan($conversation, $thread->first()->id);
     }
 
     /**
@@ -157,6 +216,11 @@ final class ChatPanel extends Component
      * This is the same call under both drivers -- fast under polling, slow under
      * a broadcaster, where it exists to heal a dropped socket rather than to
      * deliver.
+     *
+     * A tick that finds nothing new renders nothing. That is not an optimisation:
+     * every render morphs the DOM, and a morph while somebody is mid-sentence
+     * costs them the caret in the box they are typing in. Since most ticks in a
+     * quiet chat find nothing, most ticks must leave the page alone.
      */
     public function tick(): void
     {
@@ -171,6 +235,36 @@ final class ChatPanel extends Component
         if ($conversation instanceof Conversation && $user instanceof Authenticatable) {
             app(Messages::class)->markRead($conversation, $user);
         }
+
+        if ($this->fingerprint() === $this->seen) {
+            $this->skipRender();
+        }
+    }
+
+    /**
+     * Everything a render depends on, in one comparable string: the newest message
+     * in the open conversation, how much is unread anywhere, and who is around.
+     *
+     * Deliberately not the rendered HTML -- hashing markup would make every
+     * relative timestamp a change, and the thing would never settle.
+     */
+    private function fingerprint(): string
+    {
+        $user = $this->user();
+
+        if (! $user instanceof Authenticatable) {
+            return '';
+        }
+
+        $conversation = $this->conversation();
+
+        return implode('|', [
+            $conversation instanceof Conversation
+                ? (string) Message::query()->where('conversation_id', $conversation->id)->max('id')
+                : '',
+            (string) app(Messages::class)->unreadTotal($user),
+            implode(',', array_map(strval(...), app(PresenceStore::class)->active())),
+        ]);
     }
 
     /**
@@ -223,7 +317,7 @@ final class ChatPanel extends Component
             return collect();
         }
 
-        return app(Messages::class)->page($conversation, $this->oldest);
+        return app(Messages::class)->page($conversation, $this->from);
     }
 
     private function partner(): ?Authenticatable
@@ -255,8 +349,20 @@ final class ChatPanel extends Component
         return Filum::authorized($user) ? $user : null;
     }
 
-    private function pollInterval(): int
+    /**
+     * Pick up a message that arrived over a socket.
+     *
+     * Called from the browser when a broadcast lands, and it deliberately does no
+     * more than re-render: the payload carries ids, so the thread is re-read
+     * through the same authorized query the page always uses.
+     */
+    public function received(): void
     {
-        return app(Transport::class)->descriptor()['poll'];
+        $user = $this->user();
+        $conversation = $this->conversation();
+
+        if ($conversation instanceof Conversation && $user instanceof Authenticatable) {
+            app(Messages::class)->markRead($conversation, $user);
+        }
     }
 }

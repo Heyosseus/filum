@@ -63,12 +63,24 @@ To go real-time with no third party, install Reverb:
 
 ```bash
 composer require laravel/reverb
-php artisan reverb:install
+php artisan reverb:install   # also installs Echo and sets BROADCAST_CONNECTION
 php artisan reverb:start
+npm run build                # Echo has to reach the browser
 ```
 
-Filum needs no further configuration — it uses whatever
-`config/broadcasting.php` already says. To decide for yourself:
+Filum needs no further configuration — it reads whatever
+`config/broadcasting.php` already says and switches by itself.
+
+**Both halves have to be in place.** Filum starts pushing as soon as a real
+broadcaster is configured, and the browser starts listening as soon as
+`window.Echo` exists in the panel. If you configure a broadcaster but never build
+an Echo client into your assets, the socket half is missing and the
+reconciliation poll is all that is left — which is *slower* than the no-broadcaster
+default, because it is 30 seconds rather than 5. `reverb:install` sets up both;
+if you wire a broadcaster up by hand, make sure Echo is actually loaded on the
+page.
+
+To decide for yourself:
 
 ```php
 // config/filum.php

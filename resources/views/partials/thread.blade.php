@@ -26,8 +26,8 @@
     @if ($thread->isEmpty())
         <p class="filum-empty">{{ __('filum::filum.conversation.empty') }}</p>
     @else
-        {{-- Offered only when a full page came back, so short threads stay quiet. --}}
-        @if ($thread->count() >= config('filum.messages.per_page', 50))
+        {{-- Offered only when something actually precedes what is on screen. --}}
+        @if ($hasOlder)
             <button type="button" class="filum-older" wire:click="loadOlder">
                 {{ __('filum::filum.conversation.load_older') }}
             </button>

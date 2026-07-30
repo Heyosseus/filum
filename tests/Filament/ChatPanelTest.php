@@ -132,13 +132,83 @@ it('leaves a conversation and clears what was being written', function (): void 
         ->call('deselect')
         ->assertSet('selected', null)
         ->assertSet('body', '')
-        ->assertSet('oldest', null);
+        ->assertSet('from', null);
+});
+
+it('polls quickly and listens for nothing when there is no broadcaster', function (): void {
+    Livewire::test(ChatPanel::class)
+        ->assertSeeHtml('wire:poll.5s="tick"')
+        ->assertDontSeeHtml('window.Echo');
+});
+
+it('listens over the socket and slows the poll to reconciliation under a broadcaster', function (): void {
+    $this->withBroadcaster();
+
+    Livewire::test(ChatPanel::class)
+        ->assertSeeHtml('wire:poll.30s="tick"')
+        ->assertSeeHtml('filum.presence')
+        ->call('selectUser', (string) $this->giorgi->id)
+        ->assertSeeHtml('filum.conversation.')
+        ->assertSeeHtml('$wire.received()');
+});
+
+it('marks an open conversation read when a broadcast arrives', function (): void {
+    $conversation = app(Conversations::class)->between($this->nino->id, $this->giorgi->id);
+
+    $panel = Livewire::test(ChatPanel::class)->call('selectUser', (string) $this->giorgi->id);
+
+    app(Messages::class)->send($conversation, $this->giorgi, 'over the wire');
+
+    expect(app(Messages::class)->unreadIn($conversation, $this->nino))->toBe(1);
+
+    $panel->call('received')->assertSee('over the wire');
+
+    expect(app(Messages::class)->unreadIn($conversation, $this->nino))->toBe(0);
+});
+
+it('receives harmlessly with nothing open', function (): void {
+    Livewire::test(ChatPanel::class)->call('received')->assertSet('selected', null);
 });
 
 it('records presence on every tick', function (): void {
     Livewire::test(ChatPanel::class)->call('tick');
 
     expect(app(PresenceStore::class)->active())->toBe([$this->nino->id]);
+});
+
+it('leaves the page alone on a tick that finds nothing new', function (): void {
+    $panel = Livewire::test(ChatPanel::class)
+        ->call('selectUser', (string) $this->giorgi->id)
+        ->assertSee('Giorgi')
+        // The first tick is legitimately a change: it is the one that records the
+        // viewer's own presence. Settle that before testing the quiet case.
+        ->call('tick');
+
+    // Renamed behind the component's back. A name is not part of the fingerprint,
+    // so a tick that re-rendered would show the new one -- which makes the old one
+    // still being there proof that no render, and so no DOM morph, happened. That
+    // morph is what takes the caret out of the box somebody is typing in.
+    $this->giorgi->update(['name' => 'Giorgi Renamed']);
+
+    $panel->call('tick')->assertDontSee('Giorgi Renamed');
+});
+
+it('re-renders on a tick that finds a new message', function (): void {
+    $conversation = app(Conversations::class)->between($this->nino->id, $this->giorgi->id);
+
+    $panel = Livewire::test(ChatPanel::class)->call('selectUser', (string) $this->giorgi->id);
+
+    app(Messages::class)->send($conversation, $this->giorgi, 'look at this');
+
+    $panel->call('tick')->assertSee('look at this');
+});
+
+it('re-renders on a tick that finds a colleague arriving', function (): void {
+    $panel = Livewire::test(ChatPanel::class)->call('tick');
+
+    app(Heartbeat::class)->beat($this->giorgi);
+
+    $panel->call('tick')->assertSeeHtml('filum-avatar-live');
 });
 
 it('keeps an open conversation read as new messages arrive on a tick', function (): void {
@@ -156,7 +226,7 @@ it('keeps an open conversation read as new messages arrive on a tick', function 
     expect(app(Messages::class)->unreadIn($conversation, $this->nino))->toBe(0);
 });
 
-it('walks backwards through a long thread', function (): void {
+it('keeps the newest messages on screen when it reaches back for earlier ones', function (): void {
     config()->set('filum.messages.rate_limit', 0);
     config()->set('filum.messages.per_page', 5);
 
@@ -171,7 +241,44 @@ it('walks backwards through a long thread', function (): void {
         ->assertSee('message 12')
         ->assertDontSee('message 3')
         ->call('loadOlder')
-        ->assertSee('message 3');
+        // Both, which is the point: reaching back adds context rather than
+        // swapping one window of the conversation for another.
+        ->assertSee('message 3')
+        ->assertSee('message 12');
+});
+
+it('offers earlier messages only while there are earlier messages', function (): void {
+    config()->set('filum.messages.rate_limit', 0);
+    config()->set('filum.messages.per_page', 5);
+
+    $conversation = app(Conversations::class)->between($this->nino->id, $this->giorgi->id);
+
+    foreach (range(1, 8) as $i) {
+        app(Messages::class)->send($conversation, $this->giorgi, "message {$i}");
+    }
+
+    $panel = Livewire::test(ChatPanel::class)->call('selectUser', (string) $this->giorgi->id);
+
+    $panel->assertSee(__('filum::filum.conversation.load_older'))
+        ->call('loadOlder')
+        ->assertSee('message 1')
+        ->assertDontSee(__('filum::filum.conversation.load_older'));
+});
+
+it('says nothing about earlier messages in an empty conversation', function (): void {
+    Livewire::test(ChatPanel::class)
+        ->call('selectUser', (string) $this->giorgi->id)
+        ->assertDontSee(__('filum::filum.conversation.load_older'));
+});
+
+it('reaches back for nothing when there is no conversation open', function (): void {
+    Livewire::test(ChatPanel::class)
+        ->call('loadOlder')
+        ->assertSet('from', null)
+        ->call('selectUser', (string) $this->giorgi->id)
+        // Selected, but nothing has been said yet: still nowhere to reach back to.
+        ->call('loadOlder')
+        ->assertSet('from', null);
 });
 
 it('opens and closes in overlay mode', function (): void {
