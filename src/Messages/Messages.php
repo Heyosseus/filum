@@ -6,6 +6,7 @@ namespace Heyosseus\Filum\Messages;
 
 use Carbon\CarbonImmutable;
 use Heyosseus\Filum\Contracts\Notifier;
+use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Conversations\Conversations;
@@ -34,6 +35,7 @@ final readonly class Messages
         private RateLimiter $limiter,
         private Repository $config,
         private LoggerInterface $logger,
+        private PresenceStore $presence,
     ) {}
 
     /**
@@ -93,12 +95,16 @@ final readonly class Messages
      */
     private function notify(Message $message, Conversation $conversation, int|string $senderId): void
     {
+        // Read once rather than per recipient: a group of twelve should not cost
+        // twelve presence queries.
+        $present = array_map(strval(...), $this->presence->active());
+
         Participant::query()
             ->where('conversation_id', $conversation->id)
             ->whereNot('user_id', $senderId)
             ->where('state', 'joined')
             ->get()
-            ->each(function (Participant $participant) use ($message): void {
+            ->each(function (Participant $participant) use ($message, $present): void {
                 $unread = $this->unreadQuery(
                     $participant->conversation_id,
                     $participant->user_id,
@@ -106,6 +112,14 @@ final readonly class Messages
                 )->count();
 
                 if ($unread !== 1) {
+                    return;
+                }
+
+                // Somebody with the panel open already sees the count, on the
+                // colleague and on the overlay tab. "Present" is the same set the
+                // board renders as HERE NOW, which is what makes the two agree:
+                // if it would show them as here, they can see the counter.
+                if (in_array((string) $participant->user_id, $present, true)) {
                     return;
                 }
 

@@ -170,3 +170,39 @@ it('keeps the invitation when a notifier throws', function (): void {
 
     Log::shouldHaveReceived('warning')->once();
 });
+
+it('stays quiet for a recipient who is present, leaving them the counter', function (): void {
+    app(Heyosseus\Filum\Presence\Heartbeat::class)->beat($this->giorgi);
+
+    app(Messages::class)->send($this->conversation, $this->nino, 'you are looking at this already');
+
+    // Nothing in the bell, but the unread count is still there -- somebody with
+    // the panel open sees the number on the colleague and on the overlay tab, so
+    // ringing as well would tell them the same fact twice.
+    expect(bell($this->giorgi->id))->toBeEmpty()
+        ->and(app(Messages::class)->unreadIn($this->conversation, $this->giorgi))->toBe(1);
+});
+
+it('rings for a recipient whose presence has lapsed', function (): void {
+    app(Heyosseus\Filum\Presence\Heartbeat::class)->beat($this->giorgi);
+
+    // Past the presence TTL, so the board would no longer show them as here.
+    $this->travel(config('filum.presence.ttl') + 10)->seconds();
+
+    app(Messages::class)->send($this->conversation, $this->nino, 'you missed this');
+
+    expect(bell($this->giorgi->id))->toHaveCount(1);
+});
+
+it('stays quiet about an invitation for someone who is present', function (): void {
+    app(Heyosseus\Filum\Presence\Heartbeat::class)->beat($this->giorgi);
+
+    $groups = app(Heyosseus\Filum\Groups\Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+
+    // The INVITATIONS section appears within a tick, because the fingerprint
+    // counts pending invitations.
+    expect(bell($this->giorgi->id))->toBeEmpty()
+        ->and($group->participants()->where('user_id', $this->giorgi->id)->value('state'))->toBe('invited');
+});

@@ -6,6 +6,7 @@ namespace Heyosseus\Filum\Groups;
 
 use Carbon\CarbonImmutable;
 use Heyosseus\Filum\Contracts\Notifier;
+use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Exceptions\AlreadyInvited;
 use Heyosseus\Filum\Exceptions\NotAGroup;
@@ -39,6 +40,7 @@ final readonly class Groups
         private Repository $config,
         private Notifier $notifier,
         private LoggerInterface $logger,
+        private PresenceStore $presence,
     ) {}
 
     public function create(Authenticatable $owner, string $name): Conversation
@@ -118,6 +120,12 @@ final readonly class Groups
      */
     private function announce(Conversation $group, int|string $userId, Authenticatable $inviter): void
     {
+        // Same rule as a message: a present colleague sees the INVITATIONS section
+        // appear on the next tick, so the bell would only repeat it.
+        if (in_array((string) $userId, array_map(strval(...), $this->presence->active()), true)) {
+            return;
+        }
+
         try {
             $recipient = $this->users->find((string) $userId);
 
