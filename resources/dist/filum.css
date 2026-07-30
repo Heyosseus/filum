@@ -646,3 +646,21 @@
 .filum-new-group {
     padding: 0.375rem 0.5rem 0;
 }
+
+.filum-invite > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.filum-invite > summary::-webkit-details-marker {
+    display: none;
+}
+
+.filum-invite-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 0.375rem 0 0;
+    padding: 0;
+    list-style: none;
+}

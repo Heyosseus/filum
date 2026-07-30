@@ -28,7 +28,7 @@ return [
         'groups' => 'Groups',
         'new_group' => 'New group',
         'group_name' => 'Group name',
-        'members' => ':count members',
+        'members' => '{1} :count member|[2,*] :count members',
         'accept' => 'Accept',
         'decline' => 'Decline',
         'invite' => 'Invite',

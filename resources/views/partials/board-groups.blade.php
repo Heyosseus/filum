@@ -30,11 +30,24 @@
             @endforeach
         </ul>
 
-        <form class="filum-new-group" wire:submit="createGroup">
+        {{--
+            wire:ignore for the same reason the composer's textarea carries it:
+            this component polls, a poll is a re-render, and a re-render morphs a
+            deferred wire:model back to the server's empty string -- so a name
+            half-typed would vanish every few seconds. The component empties the
+            box explicitly, and only once a group was actually made.
+        --}}
+        <form
+            class="filum-new-group"
+            wire:submit="createGroup"
+            x-on:filum-group-name-cleared.window="$refs.groupName.value = ''"
+        >
             <input
                 type="text"
                 class="filum-search"
                 wire:model="groupName"
+                wire:ignore
+                x-ref="groupName"
                 placeholder="{{ __('filum::filum.sidebar.new_group') }}"
                 aria-label="{{ __('filum::filum.sidebar.group_name') }}"
                 maxlength="120"

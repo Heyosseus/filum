@@ -89,6 +89,8 @@
                             'partner' => $partner,
                             'partnerOnline' => $partnerOnline,
                             'group' => $group,
+                            'members' => $members,
+                            'invitable' => $invitable,
                             'hasOlder' => $hasOlder,
                         ])
 

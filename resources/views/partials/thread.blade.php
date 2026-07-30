@@ -26,7 +26,12 @@
 @endphp
 
 @if ($group !== null)
-    @include('filum::partials.group-header', ['group' => $group, 'me' => $me])
+    @include('filum::partials.group-header', [
+        'group' => $group,
+        'me' => $me,
+        'members' => $members,
+        'invitable' => $invitable,
+    ])
 @else
     <header class="filum-thread-head">
         <button type="button" class="filum-back" wire:click="deselect">

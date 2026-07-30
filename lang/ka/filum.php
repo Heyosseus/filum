@@ -28,7 +28,10 @@ return [
         'groups' => 'ჯგუფები',
         'new_group' => 'ახალი ჯგუფი',
         'group_name' => 'ჯგუფის სახელი',
-        'members' => ':count წევრი',
+        // Georgian nouns take no numeral agreement, so both branches read alike --
+        // spelled out rather than collapsed to one so the shape matches English and
+        // a translator can see nothing was forgotten.
+        'members' => '{1} :count წევრი|[2,*] :count წევრი',
         'accept' => 'მიღება',
         'decline' => 'უარი',
         'invite' => 'მოწვევა',

@@ -44,6 +44,40 @@ final readonly class Boards
     }
 
     /**
+     * The colleagues who could still be asked into a group.
+     *
+     * Anyone already invited or joined is left out -- inviting them again is the
+     * one thing Groups::invite refuses. Somebody who left is offered again, which
+     * is what makes a re-invite possible at all: their row survives, and with it
+     * the message they had read up to.
+     *
+     * Not part of Board: the board is the same for every render, while this
+     * depends on which group is open, and folding it in would mean recomputing it
+     * on every render that has no group open at all.
+     *
+     * @return list<array{id: string, name: string, avatar: string|null, unread: int}>
+     */
+    public function invitableFor(Authenticatable $user, Conversation $group): array
+    {
+        $taken = array_map(strval(...), $group->participants()
+            ->whereIn('state', ['invited', 'joined'])
+            ->pluck('user_id')
+            ->all());
+
+        $rows = [];
+
+        foreach ($this->users->chattable($user) as $colleague) {
+            if (in_array((string) $this->users->id($colleague), $taken, true)) {
+                continue;
+            }
+
+            $rows[] = $this->person($user, $colleague);
+        }
+
+        return $rows;
+    }
+
+    /**
      * @return array{id: string, name: string, avatar: string|null, unread: int}
      */
     private function person(Authenticatable $user, Authenticatable $colleague): array

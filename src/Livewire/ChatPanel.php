@@ -99,6 +99,8 @@ final class ChatPanel extends Component
             ? app(Boards::class)->for($user, $this->search)
             : new Board([], [], [], []);
 
+        $group = $conversation instanceof Conversation && $conversation->isGroup() ? $conversation : null;
+
         // Recorded on the way out, so a tick always compares against what is
         // genuinely on screen rather than against a guess made somewhere else.
         $this->seen = $this->fingerprint();
@@ -111,12 +113,53 @@ final class ChatPanel extends Component
             'board' => $board,
             'thread' => $thread,
             'partner' => $this->partner(),
-            'group' => $conversation instanceof Conversation && $conversation->isGroup() ? $conversation : null,
+            'group' => $group,
+            'invitable' => $this->invitable($user, $group),
+            'members' => $this->members($board, $group),
             'poll' => $descriptor['poll'],
             'driver' => $descriptor['driver'],
             'conversationId' => $conversation?->id,
             'hasOlder' => $this->hasOlder($thread),
         ]);
+    }
+
+    /**
+     * The colleagues who could still be asked into the open group.
+     *
+     * Asked only when there is a group open to ask about, so a board on its own
+     * costs nothing.
+     *
+     * @return list<array{id: string, name: string, avatar: string|null, unread: int}>
+     */
+    private function invitable(?Authenticatable $user, ?Conversation $group): array
+    {
+        if (! $user instanceof Authenticatable || ! $group instanceof Conversation) {
+            return [];
+        }
+
+        return app(Boards::class)->invitableFor($user, $group);
+    }
+
+    /**
+     * How many people are in the open group, read off the board rather than
+     * counted again: the board already asked, and two answers can disagree.
+     *
+     * Zero when the open group is not on the board -- which is what a group the
+     * viewer has not joined looks like from here.
+     */
+    private function members(Board $board, ?Conversation $group): int
+    {
+        if (! $group instanceof Conversation) {
+            return 0;
+        }
+
+        foreach ($board->groups as $row) {
+            if ($row['id'] === $group->id) {
+                return $row['members'];
+            }
+        }
+
+        return 0;
     }
 
     /**
@@ -214,8 +257,22 @@ final class ChatPanel extends Component
             return;
         }
 
-        $this->groupName = '';
+        $this->clearGroupName();
         $this->open($group);
+    }
+
+    /**
+     * Empty the new-group field, on the server and in the browser.
+     *
+     * The same problem the composer has, for the same reason: the input carries
+     * wire:ignore so that a poll cannot morph a half-typed name back to the
+     * server's empty string, which also means emptying the property is not enough
+     * on its own -- the browser has to be told, and only once a group was made.
+     */
+    private function clearGroupName(): void
+    {
+        $this->groupName = '';
+        $this->dispatch('filum-group-name-cleared');
     }
 
     public function acceptInvitation(int $id): void
@@ -296,9 +353,11 @@ final class ChatPanel extends Component
         try {
             app(Groups::class)->delete($group, $me);
         } catch (NotTheOwner) {
-            // Shown against groupName because that is the only field the board
-            // owns; it is a refusal, not a complaint about the name.
-            $this->addError('groupName', __('filum::filum.sidebar.not_yours_to_delete'));
+            // Keyed 'group' rather than 'groupName', and rendered in the group
+            // header: groupName's error block lives in the board, and the drawer
+            // swaps the board out while a thread is open -- so the refusal would
+            // arrive in a pane nobody is looking at.
+            $this->addError('group', __('filum::filum.sidebar.not_yours_to_delete'));
 
             return;
         } catch (NotAGroup) {

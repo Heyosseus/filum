@@ -60,7 +60,7 @@ it('hides the invitations section when there are none', function (): void {
     Livewire::test(ChatPanel::class)->assertDontSee(__('filum::filum.sidebar.invitations'));
 });
 
-it('invites a colleague from the group header', function (): void {
+it('invites a colleague into a group it is in', function (): void {
     $group = app(Groups::class)->create($this->nino, 'Couriers');
 
     Livewire::test(ChatPanel::class)
@@ -68,6 +68,54 @@ it('invites a colleague from the group header', function (): void {
         ->call('inviteToGroup', (string) $this->giorgi->id);
 
     expect($group->participants()->where('user_id', $this->giorgi->id)->value('state'))->toBe('invited');
+});
+
+it('offers the colleagues not in the group yet, and stops offering the one invited', function (): void {
+    $group = app(Groups::class)->create($this->nino, 'Couriers');
+
+    $panel = Livewire::test(ChatPanel::class)->call('selectConversation', $group->id);
+
+    // The wire:click, not merely the name: the board lists Giorgi too, so only the
+    // control's own call proves the picker is what is on screen.
+    $panel->assertSee(__('filum::filum.sidebar.invite'))
+        ->assertSeeHtml("inviteToGroup('{$this->giorgi->id}')")
+        ->call('inviteToGroup', (string) $this->giorgi->id);
+
+    expect($group->participants()->where('user_id', $this->giorgi->id)->value('state'))->toBe('invited');
+
+    // Already asked, and they were the only colleague: with nobody left to invite
+    // the disclosure is gone rather than open and empty.
+    $panel->assertDontSeeHtml('inviteToGroup(')
+        ->assertDontSee(__('filum::filum.sidebar.invite'));
+});
+
+it('offers somebody who left the group again', function (): void {
+    $groups = app(Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+    $groups->accept($group, $this->giorgi);
+    $groups->leave($group, $this->giorgi);
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->assertSeeHtml("inviteToGroup('{$this->giorgi->id}')");
+});
+
+it('counts the members of a group in the singular and the plural', function (): void {
+    $groups = app(Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->assertSee('1 member')
+        ->assertDontSee('1 members');
+
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+    $groups->accept($group, $this->giorgi);
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->assertSee('2 members');
 });
 
 it('leaves a group and closes the thread', function (): void {
@@ -105,9 +153,27 @@ it('refuses to delete a group it does not own, without throwing', function (): v
     Livewire::test(ChatPanel::class)
         ->call('selectConversation', $group->id)
         ->call('deleteGroup')
-        ->assertHasErrors('groupName');
+        // Keyed 'group' and rendered in the header, so the drawer -- which swaps
+        // the board out while a thread is open -- still shows the refusal.
+        ->assertHasErrors('group')
+        ->assertSee(__('filum::filum.sidebar.not_yours_to_delete'));
 
     expect(Conversation::query()->find($group->id))->not->toBeNull();
+});
+
+it('does nothing with the group actions in a group it has not joined', function (): void {
+    $group = app(Groups::class)->create($this->giorgi, 'Theirs');
+
+    // Set straight onto the public property, which is the browser-reachable path
+    // selectConversation's membership check does not cover.
+    Livewire::test(ChatPanel::class)
+        ->set('conversation', $group->id)
+        ->call('inviteToGroup', (string) $this->giorgi->id)
+        ->call('leaveGroup')
+        ->assertHasNoErrors();
+
+    expect($group->participants()->count())->toBe(1)
+        ->and($group->fresh()?->includes($this->giorgi->id))->toBeTrue();
 });
 
 it('creates nothing for a viewer it will not admit', function (): void {
