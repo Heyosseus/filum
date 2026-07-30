@@ -8,6 +8,7 @@ use Heyosseus\Filum\Livewire\ChatPanel;
 use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
+use Heyosseus\Filum\Presence\Heartbeat;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -113,7 +114,25 @@ it('shows an unread badge for a colleague who wrote first', function (): void {
     $conversation = app(Conversations::class)->between($this->nino->id, $this->giorgi->id);
     app(Messages::class)->send($conversation, $this->giorgi, 'knock knock');
 
-    Livewire::test(ChatPanel::class)->assertSeeHtml('filum-badge');
+    Livewire::test(ChatPanel::class)->assertSeeHtml('filum-count');
+});
+
+it('groups the board by who is here and who is away', function (): void {
+    app(Heartbeat::class)->beat($this->giorgi);
+
+    Livewire::test(ChatPanel::class)
+        ->assertSeeHtml('filum-avatar-live')
+        ->assertSeeInOrder([__('filum::filum.sidebar.here'), 'Giorgi']);
+});
+
+it('leaves a conversation and clears what was being written', function (): void {
+    Livewire::test(ChatPanel::class)
+        ->call('selectUser', (string) $this->giorgi->id)
+        ->set('body', 'half a thought')
+        ->call('deselect')
+        ->assertSet('selected', null)
+        ->assertSet('body', '')
+        ->assertSet('oldest', null);
 });
 
 it('records presence on every tick', function (): void {

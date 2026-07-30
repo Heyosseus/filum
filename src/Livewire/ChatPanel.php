@@ -89,6 +89,20 @@ final class ChatPanel extends Component
         }
     }
 
+    /**
+     * Close the open conversation and go back to the board.
+     *
+     * The drawer shows one pane at a time, so leaving a thread is a real action
+     * there rather than just looking elsewhere on screen.
+     */
+    public function deselect(): void
+    {
+        $this->selected = null;
+        $this->oldest = null;
+        $this->body = '';
+        $this->resetErrorBag();
+    }
+
     public function toggle(): void
     {
         $this->open = ! $this->open;

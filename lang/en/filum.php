@@ -20,6 +20,8 @@ return [
         'none_found' => 'No colleague matches that search.',
         'online' => 'Online',
         'offline' => 'Offline',
+        'here' => 'Here now',
+        'away' => 'Away',
         'last_seen' => 'Last seen :time',
         'never_seen' => 'Never signed in',
     ],
@@ -30,6 +32,8 @@ return [
         'load_older' => 'Load earlier messages',
         'you' => 'You',
         'sent_at' => 'Sent :time',
+        'today' => 'Today',
+        'yesterday' => 'Yesterday',
     ],
 
     'composer' => [
