@@ -6,6 +6,7 @@ use Heyosseus\Filum\Groups\Groups;
 use Heyosseus\Filum\Livewire\ChatPanel;
 use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
+use Heyosseus\Filum\Models\Message;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -162,6 +163,154 @@ it('refuses to delete a group it does not own, without throwing', function (): v
     expect(Conversation::query()->find($group->id))->not->toBeNull();
 });
 
+it('renames a group it owns from the header', function (): void {
+    $group = app(Groups::class)->create($this->nino, 'Couriers');
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        // The field is on screen for the owner, or there would be nothing to type in.
+        ->assertSee(__('filum::filum.sidebar.rename_group'))
+        ->set('rename', 'Couriers East')
+        ->call('renameGroup')
+        ->assertSet('rename', '')
+        ->assertHasNoErrors()
+        ->assertSee('Couriers East');
+
+    expect($group->fresh()?->name)->toBe('Couriers East');
+});
+
+it('shows an error rather than throwing on a renamed group with no name', function (): void {
+    $group = app(Groups::class)->create($this->nino, 'Couriers');
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->set('rename', '   ')
+        ->call('renameGroup')
+        ->assertHasErrors('rename')
+        ->assertSee(__('filum::filum.sidebar.group_needs_name'));
+
+    expect($group->fresh()?->name)->toBe('Couriers');
+});
+
+it('refuses a rename by anyone but the owner, without throwing', function (): void {
+    $groups = app(Groups::class);
+    $group = $groups->create($this->giorgi, 'Couriers');
+    $groups->invite($group, $this->giorgi, $this->nino->id);
+    $groups->accept($group, $this->nino);
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        // No field for a member: the control is the owner's, and so is the refusal
+        // this test forges past it.
+        ->assertDontSee(__('filum::filum.sidebar.rename_group'))
+        ->set('rename', 'Mine Now')
+        ->call('renameGroup')
+        ->assertHasErrors('group')
+        ->assertSee(__('filum::filum.sidebar.not_yours_to_rename'));
+
+    expect($group->fresh()?->name)->toBe('Couriers');
+});
+
+it('does nothing renaming when nothing is open or the thread is direct', function (): void {
+    Livewire::test(ChatPanel::class)
+        ->set('rename', 'Couriers East')
+        ->call('renameGroup')
+        ->assertHasNoErrors()
+        ->call('selectUser', (string) $this->giorgi->id)
+        ->call('renameGroup')
+        ->assertHasNoErrors();
+
+    expect(Conversation::query()->firstOrFail()->name)->toBeNull();
+});
+
+it('removes a member from the header, and withdraws an invitation the same way', function (): void {
+    $groups = app(Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+
+    $panel = Livewire::test(ChatPanel::class)->call('selectConversation', $group->id);
+
+    // Listed while still pending, and marked as such: withdrawing an invitation and
+    // ejecting a member are the same control.
+    $panel->assertSee(__('filum::filum.sidebar.pending'))
+        ->assertSeeHtml("removeMember('{$this->giorgi->id}')")
+        ->call('removeMember', (string) $this->giorgi->id)
+        ->assertHasNoErrors();
+
+    expect($group->participants()->where('user_id', $this->giorgi->id)->value('state'))->toBe('left');
+
+    // Back in, accepted this time, and out again by the same button.
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+    $groups->accept($group, $this->giorgi);
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->assertDontSee(__('filum::filum.sidebar.pending'))
+        ->call('removeMember', (string) $this->giorgi->id);
+
+    expect($group->fresh()?->includes($this->giorgi->id))->toBeFalse();
+});
+
+it('offers no roster and no removal to a member who does not own the group', function (): void {
+    $groups = app(Groups::class);
+    $group = $groups->create($this->giorgi, 'Couriers');
+    $groups->invite($group, $this->giorgi, $this->nino->id);
+    $groups->accept($group, $this->nino);
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->assertDontSeeHtml('removeMember(')
+        ->call('removeMember', (string) $this->giorgi->id)
+        ->assertHasErrors('group')
+        ->assertSee(__('filum::filum.sidebar.not_yours_to_remove'));
+
+    expect($group->fresh()?->includes($this->giorgi->id))->toBeTrue();
+});
+
+it('renders no removal control against the owner, and refuses one aimed there', function (): void {
+    $group = app(Groups::class)->create($this->nino, 'Couriers');
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        // An owner leaves rather than removing themselves, so the roster never
+        // offers it -- and a forged call is turned away in silence rather than
+        // stranding a group nobody owns.
+        ->assertDontSeeHtml("removeMember('{$this->nino->id}')")
+        ->call('removeMember', (string) $this->nino->id)
+        ->assertHasNoErrors();
+
+    expect($group->fresh()?->includes($this->nino->id))->toBeTrue();
+});
+
+it('does nothing removing somebody who is not there, with nothing open, or in a direct thread', function (): void {
+    $group = app(Groups::class)->create($this->nino, 'Couriers');
+
+    Livewire::test(ChatPanel::class)
+        ->call('removeMember', (string) $this->giorgi->id)
+        ->assertHasNoErrors()
+        ->call('selectConversation', $group->id)
+        ->call('removeMember', (string) $this->giorgi->id)
+        ->assertHasNoErrors()
+        ->call('selectUser', (string) $this->giorgi->id)
+        ->call('removeMember', (string) $this->giorgi->id)
+        ->assertHasNoErrors();
+
+    expect($group->participants()->count())->toBe(1);
+});
+
+it('writes nothing for an invitation to a user id that names nobody', function (): void {
+    $group = app(Groups::class)->create($this->nino, 'Couriers');
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->call('inviteToGroup', '999999')
+        ->assertHasNoErrors();
+
+    // A row nobody could accept, nothing would ring for, and the picker would never
+    // offer to withdraw. It is simply not written.
+    expect($group->participants()->count())->toBe(1);
+});
+
 it('shows nothing of a thread it was never in, even with the id set directly', function (): void {
     $group = app(Groups::class)->create($this->giorgi, 'Theirs');
     app(Messages::class)->send($group, $this->giorgi, 'the float is under the till');
@@ -220,21 +369,47 @@ it('lets an open thread fall away when the group is deleted underneath it', func
         ->assertSee(__('filum::filum.conversation.none_selected'));
 });
 
-it('keeps an open group readable when groups are switched off underneath it', function (): void {
+it('makes an open group absent when groups are switched off underneath it', function (): void {
     $group = app(Groups::class)->create($this->nino, 'Couriers');
     app(Messages::class)->send($group, $this->nino, 'shift starts at six');
 
-    // Switching groups off hides the board section and refuses new groups, but
-    // somebody already joined is still joined. The member count is read off the
-    // board, which no longer lists the group, so it reads as none rather than
-    // going back to the database for a second opinion.
+    // Disabled means absent, which is what the configuration and the README both
+    // promise. Membership survives the switch -- nothing is deleted, so switching
+    // it back on restores what was there -- but nothing may be read out of it,
+    // written into it or left while it is off.
     config()->set('filum.groups.enabled', false);
 
     Livewire::test(ChatPanel::class)
         ->set('conversation', $group->id)
-        ->assertSee('shift starts at six')
+        ->assertDontSee('shift starts at six')
+        ->assertDontSee('Couriers')
         ->assertDontSee(__('filum::filum.sidebar.groups'))
-        ->assertSee('0 members');
+        ->assertDontSee(__('filum::filum.sidebar.leave_group'))
+        ->assertSee(__('filum::filum.conversation.none_selected'))
+        ->set('body', 'anybody there?')
+        ->call('send')
+        ->call('leaveGroup')
+        ->call('deleteGroup')
+        ->assertHasNoErrors();
+
+    // Nothing written, and nobody's membership quietly altered on the way past.
+    expect(Message::query()->where('body', 'anybody there?')->exists())->toBeFalse()
+        ->and($group->fresh()?->includes($this->nino->id))->toBeTrue();
+});
+
+it('leaves a direct conversation entirely alone when groups are switched off', function (): void {
+    config()->set('filum.groups.enabled', false);
+
+    // The control for the test above: without it, that one would pass just as well
+    // against a component that renders nothing at all once the switch is off.
+    Livewire::test(ChatPanel::class)
+        ->call('selectUser', (string) $this->giorgi->id)
+        ->set('body', 'the float is under the till')
+        ->call('send')
+        ->assertHasNoErrors()
+        ->assertSee('the float is under the till');
+
+    expect(Message::query()->where('body', 'the float is under the till')->exists())->toBeTrue();
 });
 
 it('creates nothing for a viewer it will not admit', function (): void {

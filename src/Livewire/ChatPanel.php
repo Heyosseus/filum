@@ -63,6 +63,9 @@ final class ChatPanel extends Component
     /** What the board's new-group field holds, and where its refusals are shown. */
     public string $groupName = '';
 
+    /** What the group header's rename field holds, and where its refusals are shown. */
+    public string $rename = '';
+
     /**
      * The oldest message to show, for scrollback. Null means the newest page.
      *
@@ -79,6 +82,25 @@ final class ChatPanel extends Component
      * and cannot tell a quiet poll from a real change.
      */
     public string $seen = '';
+
+    /**
+     * conversation()'s answer for this request, and the id it answered for.
+     *
+     * Private, so Livewire neither serialises it nor carries it between requests:
+     * the memo is per request only, and a request is the longest a "which
+     * conversation is open, and may I see it" answer can safely be trusted for.
+     *
+     * Invalidated two ways, because this is the security seam and one way is not
+     * enough. The id is part of the key, so opening or closing a conversation
+     * cannot be answered from a memo about a different one; and forget() is called
+     * after every action that changes membership or existence, so an accept, a
+     * leave or a delete cannot be read past. The alternative -- memoising inside
+     * render() alone -- would leave the five or six calls an action makes
+     * un-memoised for no gain in safety.
+     */
+    private ?int $memoisedFor = null;
+
+    private ?Conversation $memoised = null;
 
     public function mount(string $mode = 'page'): void
     {
@@ -115,6 +137,7 @@ final class ChatPanel extends Component
             'partner' => $this->partner(),
             'group' => $group,
             'invitable' => $this->invitable($user, $group),
+            'roster' => $this->roster($user, $group),
             'members' => $this->members($board, $group),
             'poll' => $descriptor['poll'],
             'driver' => $descriptor['driver'],
@@ -129,7 +152,7 @@ final class ChatPanel extends Component
      * Asked only when there is a group open to ask about, so a board on its own
      * costs nothing.
      *
-     * @return list<array{id: string, name: string, avatar: string|null, unread: int}>
+     * @return list<array{id: string, name: string}>
      */
     private function invitable(?Authenticatable $user, ?Conversation $group): array
     {
@@ -141,11 +164,35 @@ final class ChatPanel extends Component
     }
 
     /**
+     * Who the owner of the open group could remove.
+     *
+     * Empty for anyone but the owner, because removal is the owner's alone: a
+     * roster with no control against any row would be a list nobody could act on,
+     * and the header sits in a 26rem drawer where every line has to earn its place.
+     *
+     * @return list<array{id: string, name: string, pending: bool}>
+     */
+    private function roster(?Authenticatable $user, ?Conversation $group): array
+    {
+        if (! $user instanceof Authenticatable || ! $group instanceof Conversation) {
+            return [];
+        }
+
+        if ((string) $group->owner_id !== (string) app(UserProvider::class)->id($user)) {
+            return [];
+        }
+
+        return app(Boards::class)->rosterFor($user, $group);
+    }
+
+    /**
      * How many people are in the open group, read off the board rather than
      * counted again: the board already asked, and two answers can disagree.
      *
-     * Zero when the open group is not on the board -- which is what a group the
-     * viewer has not joined looks like from here.
+     * Zero when nothing is open, and zero as the fallback if the open group is
+     * somehow not on the board -- which, now that a group only resolves at all
+     * when the viewer has joined it and groups are switched on, is a shape the
+     * types still allow rather than a state anything can reach.
      */
     private function members(Board $board, ?Conversation $group): int
     {
@@ -153,13 +200,7 @@ final class ChatPanel extends Component
             return 0;
         }
 
-        foreach ($board->groups as $row) {
-            if ($row['id'] === $group->id) {
-                return $row['members'];
-            }
-        }
-
-        return 0;
+        return array_column($board->groups, 'members', 'id')[$group->id] ?? 0;
     }
 
     /**
@@ -302,6 +343,8 @@ final class ChatPanel extends Component
             return;
         }
 
+        $this->forget();
+
         if ($accept) {
             $this->open($group);
         }
@@ -317,10 +360,89 @@ final class ChatPanel extends Component
         }
 
         try {
+            // InvalidArgumentException among them because the id comes from the
+            // browser: a forged one that names nobody is turned away in silence
+            // rather than written as a row nobody could ever accept or withdraw.
             app(Groups::class)->invite($group, $me, $userId);
-        } catch (AlreadyInvited|NotAParticipant|NotAGroup) {
-            //
+        } catch (AlreadyInvited|NotAParticipant|NotAGroup|InvalidArgumentException) {
+            return;
         }
+
+        $this->forget();
+    }
+
+    /**
+     * Rename the open group from the header's inline field. Owner only.
+     */
+    public function renameGroup(): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->rename($group, $me, $this->rename);
+        } catch (InvalidArgumentException) {
+            $this->addError('rename', __('filum::filum.sidebar.group_needs_name'));
+
+            return;
+        } catch (NotTheOwner) {
+            // Keyed 'group' for the same reason deleteGroup's refusal is: it belongs
+            // beside the control that was pressed, and that control is in the header.
+            $this->addError('group', __('filum::filum.sidebar.not_yours_to_rename'));
+
+            return;
+        } catch (NotAGroup) {
+            return;
+        }
+
+        $this->clearRename();
+        $this->forget();
+    }
+
+    /**
+     * Empty the rename field, on the server and in the browser.
+     *
+     * wire:ignore on the input for the reason the composer and the new-group field
+     * carry it -- a poll morphs a half-typed name back to the server's empty
+     * string -- which means the browser has to be told separately, and only once a
+     * rename actually took.
+     */
+    private function clearRename(): void
+    {
+        $this->rename = '';
+        $this->dispatch('filum-group-renamed');
+    }
+
+    /**
+     * Put somebody out of the open group, or withdraw their invitation. Owner only.
+     */
+    public function removeMember(string $userId): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->remove($group, $me, $userId);
+        } catch (NotTheOwner) {
+            $this->addError('group', __('filum::filum.sidebar.not_yours_to_remove'));
+
+            return;
+        } catch (NotAParticipant|NotAGroup|InvalidArgumentException) {
+            // InvalidArgumentException is an owner aimed at themselves. The roster
+            // never renders a control against the owner, so this is only reachable
+            // from a forged call, and an owner who wants out has Leave group.
+            return;
+        }
+
+        $this->forget();
     }
 
     public function leaveGroup(): void
@@ -338,6 +460,7 @@ final class ChatPanel extends Component
             return;
         }
 
+        $this->forget();
         $this->deselect();
     }
 
@@ -364,6 +487,7 @@ final class ChatPanel extends Component
             return;
         }
 
+        $this->forget();
         $this->deselect();
     }
 
@@ -574,10 +698,33 @@ final class ChatPanel extends Component
             return null;
         }
 
+        if ($this->memoisedFor === $this->conversation) {
+            return $this->memoised;
+        }
+
+        $this->memoisedFor = $this->conversation;
+
+        return $this->memoised = $this->resolve($this->conversation);
+    }
+
+    /**
+     * The uncached answer: does this id name a conversation this viewer is in?
+     */
+    private function resolve(int $id): ?Conversation
+    {
         $me = $this->user();
-        $conversation = Conversation::query()->find($this->conversation);
+        $conversation = Conversation::query()->find($id);
 
         if (! $conversation instanceof Conversation || ! $me instanceof Authenticatable) {
+            return null;
+        }
+
+        // A group nobody is meant to be able to reach. Membership survives the
+        // switch, so without this a joined member could still read the thread, send
+        // into it and broadcast from it while the configuration says groups do not
+        // exist -- and could not even leave, because leaving is refused. Absent,
+        // like everywhere else in Filum.
+        if ($conversation->isGroup() && ! app(Groups::class)->enabled()) {
             return null;
         }
 
@@ -585,6 +732,15 @@ final class ChatPanel extends Component
         // ::includes applies for broadcast authorization and the send path, so a
         // pending invitee cannot read a thread they have not accepted either.
         return $conversation->includes(app(UserProvider::class)->id($me)) ? $conversation : null;
+    }
+
+    /**
+     * Drop the memo, so the next read goes back to the database.
+     */
+    private function forget(): void
+    {
+        $this->memoisedFor = null;
+        $this->memoised = null;
     }
 
     private function user(): ?Authenticatable

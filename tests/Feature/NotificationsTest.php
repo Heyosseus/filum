@@ -77,10 +77,18 @@ it('stays quiet when notifications are switched off', function (): void {
 
     expect(bell($this->giorgi->id))->toBeEmpty()
         ->and(Message::query()->count())->toBe(1);
+});
 
-    $group = app(Heyosseus\Filum\Groups\Groups::class)->create($this->nino, 'Couriers');
-    app(Heyosseus\Filum\Groups\Groups::class)->invite($group, $this->nino, $this->giorgi->id);
+it('stays quiet about an invitation when notifications are switched off', function (): void {
+    config()->set('filum.notifications.enabled', false);
+    app()->forgetInstance(Notifier::class);
 
+    $groups = app(Heyosseus\Filum\Groups\Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+
+    // The invitation is still written -- switching the bell off silences the
+    // telling, not the thing being told about.
     expect(bell($this->giorgi->id))->toBeEmpty()
         ->and($group->participants()->where('user_id', $this->giorgi->id)->exists())->toBeTrue();
 });

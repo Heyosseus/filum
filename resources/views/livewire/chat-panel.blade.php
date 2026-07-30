@@ -91,6 +91,7 @@
                             'group' => $group,
                             'members' => $members,
                             'invitable' => $invitable,
+                            'roster' => $roster,
                             'hasOlder' => $hasOlder,
                         ])
 

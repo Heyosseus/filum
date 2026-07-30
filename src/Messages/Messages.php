@@ -10,6 +10,7 @@ use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Conversations\Conversations;
+use Heyosseus\Filum\Exceptions\NotAGroup;
 use Heyosseus\Filum\Exceptions\NotAParticipant;
 use Heyosseus\Filum\Exceptions\RateLimited;
 use Heyosseus\Filum\Models\Conversation;
@@ -46,11 +47,20 @@ final readonly class Messages
      * fail quietly because the reconciliation poll will find what it missed.
      *
      * @throws NotAParticipant when the sender is not in the conversation.
+     * @throws NotAGroup when the conversation is a group and groups are switched off.
      * @throws RateLimited when the sender is sending too fast.
      */
     public function send(Conversation $conversation, Authenticatable $sender, string $body): Message
     {
         $senderId = $this->users->id($sender);
+
+        // Groups switched off means absent, and absent has to include the send path:
+        // membership survives the switch, so without this a joined member could
+        // still write into -- and broadcast from -- a conversation the
+        // configuration says does not exist.
+        if ($conversation->isGroup() && $this->config->get('filum.groups.enabled', true) !== true) {
+            throw NotAGroup::disabled();
+        }
 
         if (! $conversation->includes($senderId)) {
             throw NotAParticipant::of($conversation->id);

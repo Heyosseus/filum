@@ -265,6 +265,37 @@ it('refuses to remove somebody who is not in the group', function (): void {
     $this->groups->remove($group, $this->nino, $this->giorgi->id);
 })->throws(Heyosseus\Filum\Exceptions\NotAParticipant::class);
 
+it('refuses an invitation to a user id that resolves to nobody', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    // Checked before anything is written, because the id reaches invite() from a
+    // browser: a phantom row is one nobody can accept, nothing rings for, and the
+    // picker never offers to withdraw.
+    $this->groups->invite($group, $this->nino, 999999);
+})->throws(InvalidArgumentException::class);
+
+it('writes no participant row for an invitation it refuses', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    try {
+        $this->groups->invite($group, $this->nino, 999999);
+    } catch (InvalidArgumentException) {
+        //
+    }
+
+    expect($group->participants()->count())->toBe(1);
+});
+
+it('refuses a message into a group when groups are switched off', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    // Membership survives the switch -- nothing is deleted -- so the send path has
+    // to refuse on its own rather than trusting the surfaces to have hidden it.
+    config()->set('filum.groups.enabled', false);
+
+    app(Heyosseus\Filum\Messages\Messages::class)->send($group, $this->nino, 'anybody there?');
+})->throws(NotAGroup::class);
+
 it('lets the owner delete the group, and its messages with it', function (): void {
     $group = $this->groups->create($this->nino, 'Couriers');
     $id = $group->id;
@@ -293,7 +324,7 @@ it('lists the groups you have joined, busiest first', function (): void {
     // the coalesce(last_message_at, created_at) ordering gets this right.
     $busy = $this->groups->create($this->nino, 'Busy');
     $this->travel(90)->seconds();
-    $quiet = $this->groups->create($this->nino, 'Quiet');
+    $this->groups->create($this->nino, 'Quiet');
     $this->travel(90)->seconds();
     $busy->forceFill(['last_message_at' => now()])->save();
     $this->travelBack();

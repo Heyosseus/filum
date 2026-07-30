@@ -276,6 +276,7 @@
 
 .filum-thread-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.625rem;
     padding: 0.625rem var(--filum-pad);
@@ -663,4 +664,28 @@
     margin: 0.375rem 0 0;
     padding: 0;
     list-style: none;
+}
+
+/* The owner's controls take the whole width: the header is one flex row of
+   chrome, and a field or a roster wrapping into the middle of it would push the
+   group's own name off the line it belongs on. */
+.filum-rename,
+.filum-roster {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+.filum-roster {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.filum-roster > li {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
 }

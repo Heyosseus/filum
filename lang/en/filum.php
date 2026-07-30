@@ -34,9 +34,14 @@ return [
         'invite' => 'Invite',
         'leave_group' => 'Leave group',
         'delete_group' => 'Delete group',
+        'rename_group' => 'Rename group',
+        'remove_member' => 'Remove',
+        'pending' => 'Pending',
         'invited_by' => 'From :name',
         'group_needs_name' => 'Give the group a name.',
         'not_yours_to_delete' => 'Only the owner can delete this group.',
+        'not_yours_to_rename' => 'Only the owner can rename this group.',
+        'not_yours_to_remove' => 'Only the owner can remove someone.',
     ],
 
     'conversation' => [

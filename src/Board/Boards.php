@@ -55,26 +55,80 @@ final readonly class Boards
      * depends on which group is open, and folding it in would mean recomputing it
      * on every render that has no group open at all.
      *
-     * @return list<array{id: string, name: string, avatar: string|null, unread: int}>
+     * A name and an id and nothing else: the picker renders a button per candidate,
+     * so the conversation lookup and unread count a full row carries would be a
+     * query per colleague answering a question nobody asked.
+     *
+     * @return list<array{id: string, name: string}>
      */
     public function invitableFor(Authenticatable $user, Conversation $group): array
     {
-        $taken = array_map(strval(...), $group->participants()
-            ->whereIn('state', ['invited', 'joined'])
-            ->pluck('user_id')
-            ->all());
+        $taken = $this->states($group);
 
         $rows = [];
 
         foreach ($this->users->chattable($user) as $colleague) {
-            if (in_array((string) $this->users->id($colleague), $taken, true)) {
+            $id = (string) $this->users->id($colleague);
+
+            if (isset($taken[$id])) {
                 continue;
             }
 
-            $rows[] = $this->person($user, $colleague);
+            $rows[] = ['id' => $id, 'name' => $this->users->name($colleague)];
         }
 
         return $rows;
+    }
+
+    /**
+     * Who is in a group besides the owner, and who has yet to answer -- the roster
+     * the owner removes people from.
+     *
+     * Walked over the chattable colleagues rather than over the participant rows,
+     * for the same reason invitableFor is: names come from the provider, and the
+     * provider is the thing that decides who is addressable at all. It also means
+     * the owner is left out without a special case, since nobody is their own
+     * colleague.
+     *
+     * @return list<array{id: string, name: string, pending: bool}>
+     */
+    public function rosterFor(Authenticatable $owner, Conversation $group): array
+    {
+        $states = $this->states($group);
+
+        $rows = [];
+
+        foreach ($this->users->chattable($owner) as $colleague) {
+            $id = (string) $this->users->id($colleague);
+
+            if (! isset($states[$id])) {
+                continue;
+            }
+
+            $rows[] = [
+                'id' => $id,
+                'name' => $this->users->name($colleague),
+                'pending' => $states[$id] === 'invited',
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The state of everyone a group still counts, keyed by user id.
+     *
+     * @return array<string, string>
+     */
+    private function states(Conversation $group): array
+    {
+        $states = [];
+
+        foreach ($group->participants()->whereIn('state', ['invited', 'joined'])->get() as $participant) {
+            $states[(string) $participant->user_id] = $participant->state;
+        }
+
+        return $states;
     }
 
     /**

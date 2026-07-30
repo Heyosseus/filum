@@ -31,6 +31,7 @@
         'me' => $me,
         'members' => $members,
         'invitable' => $invitable,
+        'roster' => $roster,
     ])
 @else
     <header class="filum-thread-head">

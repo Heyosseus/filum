@@ -74,16 +74,22 @@ final readonly class Groups
     }
 
     /**
-     * Trim and bound a name. An unnamed group is not a group.
-     */
-    /**
      * Invite a colleague. Pending until they accept, so nobody is silently
      * subscribed to a conversation they never agreed to join.
+     *
+     * @throws InvalidArgumentException when the id names nobody.
      */
     public function invite(Conversation $group, Authenticatable $actor, int|string $userId): Participant
     {
         $this->assertGroup($group);
         $this->assertMember($group, $actor);
+
+        // Checked before anything is written: the id reaches here from a browser,
+        // and an invitation to a user who does not exist is a row nobody can accept,
+        // nothing rings for, and the invite picker will never offer to withdraw.
+        if (! $this->users->find($userId) instanceof Authenticatable) {
+            throw new InvalidArgumentException('There is no such user to invite.');
+        }
 
         $existing = $this->row($group, $userId);
 
@@ -225,7 +231,7 @@ final readonly class Groups
     {
         $query = Conversation::query()->where('kind', 'group');
 
-        if ($this->config->get('filum.groups.enabled', true) !== true) {
+        if (! $this->enabled()) {
             // Absent, not merely hidden: nothing downstream has to know groups
             // were switched off.
             return $query->whereRaw('1 = 0');
@@ -294,6 +300,9 @@ final readonly class Groups
             ->first();
     }
 
+    /**
+     * Trim and bound a name. An unnamed group is not a group.
+     */
     private function clean(string $name): string
     {
         $name = trim($name);
@@ -305,9 +314,22 @@ final readonly class Groups
         return mb_substr($name, 0, self::NAME_LIMIT);
     }
 
+    /**
+     * Whether groups exist at all in this application.
+     *
+     * Public because "disabled means absent" is a claim the surfaces have to be
+     * able to honour too: a joined member must not be able to read, send to or
+     * leave a group that the configuration says is not there, and the read seam in
+     * ChatPanel is where that is decided.
+     */
+    public function enabled(): bool
+    {
+        return $this->config->get('filum.groups.enabled', true) === true;
+    }
+
     private function assertEnabled(): void
     {
-        if ($this->config->get('filum.groups.enabled', true) !== true) {
+        if (! $this->enabled()) {
             throw NotAGroup::disabled();
         }
     }

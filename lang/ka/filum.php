@@ -37,9 +37,14 @@ return [
         'invite' => 'მოწვევა',
         'leave_group' => 'ჯგუფიდან გასვლა',
         'delete_group' => 'ჯგუფის წაშლა',
+        'rename_group' => 'ჯგუფის სახელის შეცვლა',
+        'remove_member' => 'ამოშლა',
+        'pending' => 'მოლოდინში',
         'invited_by' => ':name-ისგან',
         'group_needs_name' => 'მიუთითეთ ჯგუფის სახელი.',
         'not_yours_to_delete' => 'ჯგუფის წაშლა მხოლოდ მფლობელს შეუძლია.',
+        'not_yours_to_rename' => 'ჯგუფის სახელის შეცვლა მხოლოდ მფლობელს შეუძლია.',
+        'not_yours_to_remove' => 'წევრის ამოშლა მხოლოდ მფლობელს შეუძლია.',
     ],
 
     'conversation' => [
