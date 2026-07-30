@@ -176,15 +176,42 @@ it('passes ownership to the longest-joined member when the owner leaves', functi
     $dato = $this->user('Dato');
     $group = $this->groups->create($this->nino, 'Couriers');
 
-    foreach ([$this->giorgi, $dato] as $invitee) {
-        $this->groups->invite($group, $this->nino, $invitee->id);
-        $this->groups->accept($group, $invitee);
-    }
+    // Dato is invited first, so his participant row has the lower id -- the
+    // opposite of who accepts first. If reassignOwner() picked by id rather
+    // than joined_at, Dato would win instead of Giorgi, so this discriminates
+    // between the two orderings rather than agreeing with both of them.
+    $this->groups->invite($group, $this->nino, $dato->id);
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+
+    $this->groups->accept($group, $this->giorgi);
+    $this->travel(90)->seconds();
+    $this->groups->accept($group, $dato);
+    $this->travelBack();
 
     $this->groups->leave($group, $this->nino);
 
-    // Giorgi accepted first, so the group is not left without anyone who can
-    // rename or manage it.
+    // Giorgi joined first, despite the higher participant id, so the group is
+    // not left without anyone who can rename or manage it.
+    expect($group->fresh()?->owner_id)->toBe($this->giorgi->id);
+});
+
+it('breaks a joined_at tie between two members by the lower participant id', function (): void {
+    $dato = $this->user('Dato');
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    // Giorgi is invited first, so his participant row has the lower id. Both
+    // accept at the same frozen instant, so joined_at cannot discriminate and
+    // the id tiebreak must.
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+    $this->groups->invite($group, $this->nino, $dato->id);
+
+    $this->freezeTime(function () use ($group, $dato): void {
+        $this->groups->accept($group, $this->giorgi);
+        $this->groups->accept($group, $dato);
+    });
+
+    $this->groups->leave($group, $this->nino);
+
     expect($group->fresh()?->owner_id)->toBe($this->giorgi->id);
 });
 
@@ -242,10 +269,13 @@ it('lets the owner delete the group, and its messages with it', function (): voi
     $group = $this->groups->create($this->nino, 'Couriers');
     $id = $group->id;
 
+    app(Heyosseus\Filum\Messages\Messages::class)->send($group, $this->nino, 'something');
+
     $this->groups->delete($group, $this->nino);
 
     expect(Conversation::query()->find($id))->toBeNull()
-        ->and(Heyosseus\Filum\Models\Participant::query()->where('conversation_id', $id)->exists())->toBeFalse();
+        ->and(Heyosseus\Filum\Models\Participant::query()->where('conversation_id', $id)->exists())->toBeFalse()
+        ->and(Heyosseus\Filum\Models\Message::query()->where('conversation_id', $id)->exists())->toBeFalse();
 });
 
 it('refuses a deletion by anyone but the owner', function (): void {
