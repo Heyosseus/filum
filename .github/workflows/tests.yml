@@ -50,7 +50,7 @@ jobs:
             "filament/filament:^${{ matrix.filament }}.0"
 
       - name: Install dependencies
-        uses: ramsey/composer-install@v3
+        uses: ramsey/composer-install@v4
         with:
           dependency-versions: ${{ matrix.dependencies }}
 
@@ -75,7 +75,7 @@ jobs:
           coverage: pcov
 
       - name: Install dependencies
-        uses: ramsey/composer-install@v3
+        uses: ramsey/composer-install@v4
 
       - name: Rector
         run: vendor/bin/rector --dry-run --no-progress-bar
