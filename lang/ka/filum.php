@@ -5,12 +5,12 @@ declare(strict_types=1);
 return [
 
     'nav' => [
-        'chat' => 'ჩატი',
+        'chat' => 'ჩათი',
     ],
 
     'page' => [
-        'title' => 'ჩატი',
-        'heading' => 'ჩატი',
+        'title' => 'ჩათი',
+        'heading' => 'ჩათი',
     ],
 
     'sidebar' => [
@@ -45,12 +45,12 @@ return [
     ],
 
     'notification' => [
-        'open' => 'ჩატის გახსნა',
+        'open' => 'ჩათის გახსნა',
     ],
 
     'overlay' => [
-        'open' => 'ჩატის გახსნა',
-        'close' => 'ჩატის დახურვა',
+        'open' => 'ჩათის გახსნა',
+        'close' => 'ჩათის დახურვა',
         'unread' => ':count წაუკითხავი',
     ],
 
