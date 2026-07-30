@@ -285,6 +285,7 @@ final readonly class Messages
 
         Participant::query()
             ->where('user_id', $userId)
+            ->where('state', 'joined')
             ->get()
             ->each(function (Participant $participant) use (&$total, $userId): void {
                 $total += $this->unreadQuery(

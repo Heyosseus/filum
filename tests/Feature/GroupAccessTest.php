@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use Heyosseus\Filum\Conversations\Conversations;
+use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
+use Heyosseus\Filum\Models\Message;
 use Heyosseus\Filum\Models\Participant;
 
 it('treats an existing direct conversation as direct and its participants as joined', function (): void {
@@ -59,4 +61,48 @@ it('stops counting someone who left', function (): void {
     $participant->forceFill(['state' => 'left'])->save();
 
     expect($group->includes($nino->id))->toBeFalse();
+});
+
+it('does not total unread messages for a group the user has only been invited to', function (): void {
+    $nino = $this->user('Nino');
+    $giorgi = $this->user('Giorgi');
+
+    $group = Conversation::query()->create(['kind' => 'group', 'name' => 'Couriers', 'owner_id' => $nino->id]);
+
+    Participant::query()->create([
+        'conversation_id' => $group->id,
+        'user_id' => $giorgi->id,
+        'state' => 'invited',
+    ]);
+
+    Message::query()->create([
+        'conversation_id' => $group->id,
+        'sender_id' => $nino->id,
+        'body' => 'Anybody free Tuesday?',
+    ]);
+
+    expect(app(Messages::class)->unreadTotal($giorgi))->toBe(0);
+});
+
+it('does not total unread messages for a group the user has left', function (): void {
+    $nino = $this->user('Nino');
+    $giorgi = $this->user('Giorgi');
+
+    $group = Conversation::query()->create(['kind' => 'group', 'name' => 'Couriers', 'owner_id' => $nino->id]);
+
+    $participant = Participant::query()->create([
+        'conversation_id' => $group->id,
+        'user_id' => $giorgi->id,
+        'state' => 'joined',
+    ]);
+
+    $participant->forceFill(['state' => 'left'])->save();
+
+    Message::query()->create([
+        'conversation_id' => $group->id,
+        'sender_id' => $nino->id,
+        'body' => 'Anybody free Tuesday?',
+    ]);
+
+    expect(app(Messages::class)->unreadTotal($giorgi))->toBe(0);
 });

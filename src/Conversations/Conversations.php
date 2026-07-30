@@ -65,10 +65,11 @@ final class Conversations
     /**
      * The participant row joining a user to a conversation, if there is one.
      *
-     * Joined only. Every caller -- markRead, unreadIn, unreadTotal -- already means
-     * a full member, and narrowing here closes the dangerous direction: counting
-     * unread messages for somebody who cannot open them. Groups reads invited rows
-     * through its own methods.
+     * Joined only. Every caller of this method -- markRead, unreadIn -- already
+     * means a full member, and narrowing here closes the dangerous direction:
+     * counting unread messages for somebody who cannot open them. unreadTotal
+     * queries participants directly rather than through this method, so it
+     * filters for itself. Groups reads invited rows through its own methods.
      */
     public function participant(Conversation $conversation, int|string $userId): ?Participant
     {
