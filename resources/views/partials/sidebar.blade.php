@@ -19,6 +19,14 @@
     </div>
 
     <div class="filum-board-body filum-scroll">
+        {{--
+            Above the people, and outside the "nobody found" branch below: an
+            invitation waiting and a room you are already in are not answers to
+            the colleague search, and must not disappear with it.
+        --}}
+        @include('filum::partials.board-invitations', ['board' => $board])
+        @include('filum::partials.board-groups', ['board' => $board, 'conversationId' => $conversationId])
+
         @if ($board->here === [] && $board->away === [])
             <p class="filum-empty">
                 {{ $search === '' ? __('filum::filum.sidebar.empty') : __('filum::filum.sidebar.none_found') }}

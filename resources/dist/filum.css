@@ -590,3 +590,59 @@
     overflow: hidden;
     white-space: nowrap;
 }
+
+/* Groups and invitations ---------------------------------------------------- */
+
+.filum-hash {
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 auto;
+    color: var(--filum-whisper);
+    font-family: var(--filum-mono);
+    font-weight: 600;
+}
+
+.filum-avatar-group {
+    background: transparent;
+    box-shadow: 0 0 0 1px var(--filum-hairline);
+    color: var(--filum-whisper);
+    font-family: var(--filum-mono);
+}
+
+.filum-invitation {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.4375rem 0.5rem;
+}
+
+.filum-invited-by {
+    grid-column: 1 / -1;
+    order: 3;
+    color: var(--filum-whisper);
+    font-size: 0.6875rem;
+}
+
+.filum-accept,
+.filum-decline {
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--filum-hairline);
+    border-radius: var(--filum-radius-sm);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.6875rem;
+}
+
+.filum-accept {
+    background: color-mix(in oklab, var(--filum-signal) 16%, transparent);
+    border-color: transparent;
+}
+
+.filum-new-group {
+    padding: 0.375rem 0.5rem 0;
+}

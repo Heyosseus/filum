@@ -25,20 +25,8 @@
     }
 @endphp
 
-{{--
-    A group is named by its own name and says nothing about presence: "online" is
-    a fact about a person, and a room full of people does not have one.
---}}
 @if ($group !== null)
-    <header class="filum-thread-head">
-        <button type="button" class="filum-back" wire:click="deselect">
-            &larr; {{ __('filum::filum.sidebar.heading') }}
-        </button>
-
-        <span class="filum-avatar filum-avatar-group" aria-hidden="true">#</span>
-
-        <h3 class="filum-thread-name">{{ $group->name }}</h3>
-    </header>
+    @include('filum::partials.group-header', ['group' => $group, 'me' => $me])
 @else
     <header class="filum-thread-head">
         <button type="button" class="filum-back" wire:click="deselect">

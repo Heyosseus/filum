@@ -10,6 +10,11 @@ use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Conversations\Conversations;
+use Heyosseus\Filum\Exceptions\AlreadyInvited;
+use Heyosseus\Filum\Exceptions\NotAGroup;
+use Heyosseus\Filum\Exceptions\NotAParticipant;
+use Heyosseus\Filum\Exceptions\NotInvited;
+use Heyosseus\Filum\Exceptions\NotTheOwner;
 use Heyosseus\Filum\Exceptions\RateLimited;
 use Heyosseus\Filum\Filum;
 use Heyosseus\Filum\Groups\Groups;
@@ -54,6 +59,9 @@ final class ChatPanel extends Component
     public string $body = '';
 
     public string $search = '';
+
+    /** What the board's new-group field holds, and where its refusals are shown. */
+    public string $groupName = '';
 
     /**
      * The oldest message to show, for scrollback. Null means the newest page.
@@ -179,6 +187,125 @@ final class ChatPanel extends Component
     public function toggle(): void
     {
         $this->open = ! $this->open;
+    }
+
+    /**
+     * Start a group from the board's inline field and open it.
+     *
+     * Every group action below catches its typed failure and either tells the
+     * person or does nothing: all of them are reachable from a browser-supplied
+     * id, so none of them may reach an error page.
+     */
+    public function createGroup(): void
+    {
+        $me = $this->user();
+
+        if (! $me instanceof Authenticatable) {
+            return;
+        }
+
+        try {
+            $group = app(Groups::class)->create($me, $this->groupName);
+        } catch (InvalidArgumentException) {
+            $this->addError('groupName', __('filum::filum.sidebar.group_needs_name'));
+
+            return;
+        } catch (NotAGroup) {
+            return;
+        }
+
+        $this->groupName = '';
+        $this->open($group);
+    }
+
+    public function acceptInvitation(int $id): void
+    {
+        $this->respondToInvitation($id, true);
+    }
+
+    public function declineInvitation(int $id): void
+    {
+        $this->respondToInvitation($id, false);
+    }
+
+    private function respondToInvitation(int $id, bool $accept): void
+    {
+        $me = $this->user();
+        $group = Conversation::query()->find($id);
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            $accept
+                ? app(Groups::class)->accept($group, $me)
+                : app(Groups::class)->decline($group, $me);
+        } catch (NotInvited|NotAGroup) {
+            return;
+        }
+
+        if ($accept) {
+            $this->open($group);
+        }
+    }
+
+    public function inviteToGroup(string $userId): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->invite($group, $me, $userId);
+        } catch (AlreadyInvited|NotAParticipant|NotAGroup) {
+            //
+        }
+    }
+
+    public function leaveGroup(): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->leave($group, $me);
+        } catch (NotAParticipant|NotAGroup) {
+            return;
+        }
+
+        $this->deselect();
+    }
+
+    public function deleteGroup(): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->delete($group, $me);
+        } catch (NotTheOwner) {
+            // Shown against groupName because that is the only field the board
+            // owns; it is a refusal, not a complaint about the name.
+            $this->addError('groupName', __('filum::filum.sidebar.not_yours_to_delete'));
+
+            return;
+        } catch (NotAGroup) {
+            return;
+        }
+
+        $this->deselect();
     }
 
     /**

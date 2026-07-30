@@ -352,10 +352,11 @@ it('names each speaker in a group thread', function (): void {
     $groups->accept($group, $this->giorgi);
     app(Messages::class)->send($group, $this->giorgi, 'on my way');
 
-    // Anchored on the group name, which only the thread header carries: without it
-    // the sidebar's own "Giorgi" row -- rendered before the thread -- satisfies the
-    // assertion on its own and the sender-name map goes unguarded.
+    // Anchored on the group header's leave control, which nothing in the board
+    // carries -- the group's own name is now in the GROUPS section too, so
+    // anchoring on that would let the sidebar's "Giorgi" row satisfy the
+    // assertion and leave the sender-name map unguarded.
     Livewire::test(ChatPanel::class)
         ->call('selectConversation', $group->id)
-        ->assertSeeInOrder(['Couriers', 'Giorgi', 'on my way']);
+        ->assertSeeInOrder([__('filum::filum.sidebar.leave_group'), 'Giorgi', 'on my way']);
 });
