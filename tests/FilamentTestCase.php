@@ -29,6 +29,27 @@ abstract class FilamentTestCase extends TestCase
     }
 
     /**
+     * The panel's own guard, over the application's user provider.
+     *
+     * Filum's config names no guard here on purpose: these tests are what prove
+     * it follows the panel, which is what an application with an admin panel
+     * actually needs it to do.
+     *
+     * @param  Application  $app
+     */
+    #[Override]
+    protected function defineEnvironment($app): void
+    {
+        parent::defineEnvironment($app);
+
+        $config = $app->make(\Illuminate\Contracts\Config\Repository::class);
+
+        $config->set('auth.guards.panel', ['driver' => 'session', 'provider' => 'users']);
+        $config->set('auth.providers.users.model', Fixtures\User::class);
+        $config->set('filum.users.guard');
+    }
+
+    /**
      * Testbench does not run package discovery, so everything Filament relies on
      * is named here by hand, in dependency order, and last the panel carrying
      * Filum's plugin.

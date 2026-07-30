@@ -29,6 +29,10 @@ final class FilumTestPanelProvider extends PanelProvider
             ->default()
             ->id('filum-test')
             ->path('filum-test')
+            // Deliberately not the application default guard: an admin panel
+            // normally has its own, and Filum has to follow the panel rather
+            // than guess.
+            ->authGuard('panel')
             ->pages([Dashboard::class])
             ->middleware([
                 EncryptCookies::class,

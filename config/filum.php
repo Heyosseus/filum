@@ -27,11 +27,16 @@ return [
     | work. The provider decides what an admin is called and what their avatar
     | is; replace it to read your own columns.
     |
+    | Leave the guard empty and Filum follows whichever guard the panel itself
+    | uses, which is almost always what you want. Name one only to override that.
+    | The model has no such default, because migrations run with no panel in
+    | sight and the foreign key type has to come from somewhere definite.
+    |
     */
 
     'users' => [
         'model' => env('FILUM_USER_MODEL', 'App\\Models\\User'),
-        'guard' => env('FILUM_GUARD', 'web'),
+        'guard' => env('FILUM_GUARD'),
         'provider' => Heyosseus\Filum\Users\ConfiguredUserProvider::class,
         'name_column' => 'name',
         'avatar_column' => null,
