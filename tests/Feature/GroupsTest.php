@@ -287,9 +287,16 @@ it('refuses a deletion by anyone but the owner', function (): void {
 })->throws(NotTheOwner::class);
 
 it('lists the groups you have joined, busiest first', function (): void {
-    $quiet = $this->groups->create($this->nino, 'Quiet');
+    // Busy is created first, so it has the lower id -- and Quiet, created after
+    // it, has the higher one. If for() ordered by id rather than activity, it
+    // would report Quiet before Busy. Busy's activity is later still, so only
+    // the coalesce(last_message_at, created_at) ordering gets this right.
     $busy = $this->groups->create($this->nino, 'Busy');
+    $this->travel(90)->seconds();
+    $quiet = $this->groups->create($this->nino, 'Quiet');
+    $this->travel(90)->seconds();
     $busy->forceFill(['last_message_at' => now()])->save();
+    $this->travelBack();
 
     $theirs = $this->groups->create($this->giorgi, 'Not Mine');
     $this->groups->invite($theirs, $this->giorgi, $this->nino->id);

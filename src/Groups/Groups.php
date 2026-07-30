@@ -172,10 +172,6 @@ final readonly class Groups
             // no last_message_at, and DESC would sort those NULLs to opposite ends
             // on Postgres and SQLite.
             ->orderByDesc(DB::raw('coalesce(last_message_at, created_at)'))
-            // Timestamp columns store only whole seconds, so two groups touched
-            // within the same second tie on the line above. Break the tie by id,
-            // since a higher id was created later.
-            ->orderByDesc('id')
             ->get();
     }
 
