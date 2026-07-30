@@ -96,6 +96,7 @@ final readonly class Messages
         Participant::query()
             ->where('conversation_id', $conversation->id)
             ->whereNot('user_id', $senderId)
+            ->where('state', 'joined')
             ->get()
             ->each(function (Participant $participant) use ($message): void {
                 $unread = $this->unreadQuery(

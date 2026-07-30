@@ -10,6 +10,9 @@ use Override;
 
 /**
  * @property int $id
+ * @property string $kind
+ * @property string|null $name
+ * @property int|string|null $owner_id
  * @property string|null $key
  * @property \Carbon\CarbonInterface|null $last_message_at
  */
@@ -18,7 +21,7 @@ final class Conversation extends Model
     protected $table = 'filum_conversations';
 
     /** @var list<string> */
-    protected $fillable = ['key', 'last_message_at'];
+    protected $fillable = ['kind', 'name', 'owner_id', 'key', 'last_message_at'];
 
     /**
      * @return HasMany<Message, $this>
@@ -36,12 +39,25 @@ final class Conversation extends Model
         return $this->hasMany(Participant::class);
     }
 
+    public function isGroup(): bool
+    {
+        return $this->kind === 'group';
+    }
+
     /**
      * Whether the given user takes part in this conversation.
+     *
+     * Joined, specifically. This method backs both broadcast channel authorization
+     * and the sender check in Messages::send, so narrowing it here is what keeps a
+     * pending invitee out of the socket and the send path -- rather than three
+     * separate places each remembering to check.
      */
     public function includes(int|string $userId): bool
     {
-        return $this->participants()->where('user_id', $userId)->exists();
+        return $this->participants()
+            ->where('user_id', $userId)
+            ->where('state', 'joined')
+            ->exists();
     }
 
     /**

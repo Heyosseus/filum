@@ -30,6 +30,7 @@ final class Conversations
         // instead would mean re-reading a row that our own rolled-back
         // transaction had just hidden.
         DB::table('filum_conversations')->insertOrIgnore([
+            'kind' => 'direct',
             'key' => $key,
             'created_at' => $now,
             'updated_at' => $now,
@@ -43,12 +44,16 @@ final class Conversations
             [
                 'conversation_id' => $conversation->id,
                 'user_id' => $a,
+                'state' => 'joined',
+                'joined_at' => $now,
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
             [
                 'conversation_id' => $conversation->id,
                 'user_id' => $b,
+                'state' => 'joined',
+                'joined_at' => $now,
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
@@ -59,12 +64,18 @@ final class Conversations
 
     /**
      * The participant row joining a user to a conversation, if there is one.
+     *
+     * Joined only. Every caller -- markRead, unreadIn, unreadTotal -- already means
+     * a full member, and narrowing here closes the dangerous direction: counting
+     * unread messages for somebody who cannot open them. Groups reads invited rows
+     * through its own methods.
      */
     public function participant(Conversation $conversation, int|string $userId): ?Participant
     {
         return Participant::query()
             ->where('conversation_id', $conversation->id)
             ->where('user_id', $userId)
+            ->where('state', 'joined')
             ->first();
     }
 }
