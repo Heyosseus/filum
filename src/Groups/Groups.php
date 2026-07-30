@@ -113,6 +113,73 @@ final readonly class Groups
         $this->pending($group, $user)->forceFill(['state' => 'left'])->save();
     }
 
+    public function leave(Conversation $group, Authenticatable $user): void
+    {
+        $this->assertGroup($group);
+
+        $userId = $this->users->id($user);
+        $row = $this->row($group, $userId);
+
+        if (! $row instanceof Participant || $row->state !== 'joined') {
+            throw NotAParticipant::of($group->id);
+        }
+
+        $row->forceFill(['state' => 'left'])->save();
+
+        if ((string) $group->owner_id === (string) $userId) {
+            $this->reassignOwner($group, $userId);
+        }
+    }
+
+    public function remove(Conversation $group, Authenticatable $actor, int|string $userId): void
+    {
+        $this->assertOwner($group, $actor);
+
+        if ((string) $userId === (string) $group->owner_id) {
+            throw new InvalidArgumentException('The owner leaves a group rather than removing themselves.');
+        }
+
+        $row = $this->row($group, $userId);
+
+        if (! $row instanceof Participant || $row->state === 'left') {
+            throw NotAParticipant::of($group->id);
+        }
+
+        // Covers a pending invitation too: withdrawing one and ejecting a member
+        // are the same transition to the same terminal state.
+        $row->forceFill(['state' => 'left'])->save();
+    }
+
+    public function delete(Conversation $group, Authenticatable $actor): void
+    {
+        $this->assertOwner($group, $actor);
+
+        $group->delete();
+    }
+
+    /**
+     * Hand the group to the longest-joined member left, or delete it if there is
+     * nobody. An owner leaving must not strand a group nobody can manage.
+     */
+    private function reassignOwner(Conversation $group, int|string $leavingId): void
+    {
+        $next = Participant::query()
+            ->where('conversation_id', $group->id)
+            ->where('state', 'joined')
+            ->whereNot('user_id', $leavingId)
+            ->orderBy('joined_at')
+            ->orderBy('id')
+            ->first();
+
+        if (! $next instanceof Participant) {
+            $group->delete();
+
+            return;
+        }
+
+        $group->forceFill(['owner_id' => $next->user_id])->save();
+    }
+
     private function pending(Conversation $group, Authenticatable $user): Participant
     {
         $this->assertGroup($group);

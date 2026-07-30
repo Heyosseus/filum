@@ -155,3 +155,103 @@ it('re-invites someone who left, resuming where they had read to', function (): 
     expect($again->state)->toBe('invited')
         ->and($again->last_read_message_id)->toBe(7);
 });
+
+it('lets a member leave', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+    $this->groups->accept($group, $this->giorgi);
+
+    $this->groups->leave($group, $this->giorgi);
+
+    expect($group->includes($this->giorgi->id))->toBeFalse();
+});
+
+it('refuses to leave a group you are not in', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $this->groups->leave($group, $this->giorgi);
+})->throws(Heyosseus\Filum\Exceptions\NotAParticipant::class);
+
+it('passes ownership to the longest-joined member when the owner leaves', function (): void {
+    $dato = $this->user('Dato');
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    foreach ([$this->giorgi, $dato] as $invitee) {
+        $this->groups->invite($group, $this->nino, $invitee->id);
+        $this->groups->accept($group, $invitee);
+    }
+
+    $this->groups->leave($group, $this->nino);
+
+    // Giorgi accepted first, so the group is not left without anyone who can
+    // rename or manage it.
+    expect($group->fresh()?->owner_id)->toBe($this->giorgi->id);
+});
+
+it('deletes the group when the last member leaves', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $id = $group->id;
+
+    $this->groups->leave($group, $this->nino);
+
+    expect(Conversation::query()->find($id))->toBeNull();
+});
+
+it('lets the owner remove someone', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+    $this->groups->accept($group, $this->giorgi);
+
+    $this->groups->remove($group, $this->nino, $this->giorgi->id);
+
+    expect($group->includes($this->giorgi->id))->toBeFalse();
+});
+
+it('lets the owner withdraw a pending invitation', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+
+    $this->groups->remove($group, $this->nino, $this->giorgi->id);
+
+    $row = $group->participants()->where('user_id', $this->giorgi->id)->first();
+
+    expect($row?->state)->toBe('left');
+});
+
+it('refuses a removal by anyone but the owner', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+    $this->groups->accept($group, $this->giorgi);
+
+    $this->groups->remove($group, $this->giorgi, $this->nino->id);
+})->throws(NotTheOwner::class);
+
+it('sends the owner to leave rather than removing themselves', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $this->groups->remove($group, $this->nino, $this->nino->id);
+})->throws(InvalidArgumentException::class);
+
+it('refuses to remove somebody who is not in the group', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+
+    $this->groups->remove($group, $this->nino, $this->giorgi->id);
+})->throws(Heyosseus\Filum\Exceptions\NotAParticipant::class);
+
+it('lets the owner delete the group, and its messages with it', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $id = $group->id;
+
+    $this->groups->delete($group, $this->nino);
+
+    expect(Conversation::query()->find($id))->toBeNull()
+        ->and(Heyosseus\Filum\Models\Participant::query()->where('conversation_id', $id)->exists())->toBeFalse();
+});
+
+it('refuses a deletion by anyone but the owner', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+    $this->groups->accept($group, $this->giorgi);
+
+    $this->groups->delete($group, $this->giorgi);
+})->throws(NotTheOwner::class);
