@@ -6,9 +6,11 @@ namespace Heyosseus\Filum\Messages;
 
 use Carbon\CarbonImmutable;
 use Heyosseus\Filum\Contracts\Notifier;
+use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Conversations\Conversations;
+use Heyosseus\Filum\Exceptions\NotAGroup;
 use Heyosseus\Filum\Exceptions\NotAParticipant;
 use Heyosseus\Filum\Exceptions\RateLimited;
 use Heyosseus\Filum\Models\Conversation;
@@ -34,6 +36,7 @@ final readonly class Messages
         private RateLimiter $limiter,
         private Repository $config,
         private LoggerInterface $logger,
+        private PresenceStore $presence,
     ) {}
 
     /**
@@ -44,11 +47,20 @@ final readonly class Messages
      * fail quietly because the reconciliation poll will find what it missed.
      *
      * @throws NotAParticipant when the sender is not in the conversation.
+     * @throws NotAGroup when the conversation is a group and groups are switched off.
      * @throws RateLimited when the sender is sending too fast.
      */
     public function send(Conversation $conversation, Authenticatable $sender, string $body): Message
     {
         $senderId = $this->users->id($sender);
+
+        // Groups switched off means absent, and absent has to include the send path:
+        // membership survives the switch, so without this a joined member could
+        // still write into -- and broadcast from -- a conversation the
+        // configuration says does not exist.
+        if ($conversation->isGroup() && $this->config->get('filum.groups.enabled', true) !== true) {
+            throw NotAGroup::disabled();
+        }
 
         if (! $conversation->includes($senderId)) {
             throw NotAParticipant::of($conversation->id);
@@ -93,11 +105,16 @@ final readonly class Messages
      */
     private function notify(Message $message, Conversation $conversation, int|string $senderId): void
     {
+        // Read once rather than per recipient: a group of twelve should not cost
+        // twelve presence queries.
+        $present = array_map(strval(...), $this->presence->active());
+
         Participant::query()
             ->where('conversation_id', $conversation->id)
             ->whereNot('user_id', $senderId)
+            ->where('state', 'joined')
             ->get()
-            ->each(function (Participant $participant) use ($message): void {
+            ->each(function (Participant $participant) use ($message, $present): void {
                 $unread = $this->unreadQuery(
                     $participant->conversation_id,
                     $participant->user_id,
@@ -105,6 +122,14 @@ final readonly class Messages
                 )->count();
 
                 if ($unread !== 1) {
+                    return;
+                }
+
+                // Somebody with the panel open already sees the count, on the
+                // colleague and on the overlay tab. "Present" is the same set the
+                // board renders as HERE NOW, which is what makes the two agree:
+                // if it would show them as here, they can see the counter.
+                if (in_array((string) $participant->user_id, $present, true)) {
                     return;
                 }
 
@@ -284,6 +309,7 @@ final readonly class Messages
 
         Participant::query()
             ->where('user_id', $userId)
+            ->where('state', 'joined')
             ->get()
             ->each(function (Participant $participant) use (&$total, $userId): void {
                 $total += $this->unreadQuery(

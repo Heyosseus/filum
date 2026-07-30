@@ -37,7 +37,7 @@ it('titles and heads itself from the translations', function (): void {
 it('titles itself in Georgian when the panel is', function (): void {
     app()->setLocale('ka');
 
-    expect(Livewire::test(Chat::class)->instance()->getTitle())->toBe('ჩატი');
+    expect(Livewire::test(Chat::class)->instance()->getTitle())->toBe('ჩათი');
 });
 
 it('shows no badge when everything is read', function (): void {

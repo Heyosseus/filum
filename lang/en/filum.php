@@ -24,6 +24,24 @@ return [
         'away' => 'Away',
         'last_seen' => 'Last seen :time',
         'never_seen' => 'Never signed in',
+        'invitations' => 'Invitations',
+        'groups' => 'Groups',
+        'new_group' => 'New group',
+        'group_name' => 'Group name',
+        'members' => '{1} :count member|[2,*] :count members',
+        'accept' => 'Accept',
+        'decline' => 'Decline',
+        'invite' => 'Invite',
+        'leave_group' => 'Leave group',
+        'delete_group' => 'Delete group',
+        'rename_group' => 'Rename group',
+        'remove_member' => 'Remove',
+        'pending' => 'Pending',
+        'invited_by' => 'From :name',
+        'group_needs_name' => 'Give the group a name.',
+        'not_yours_to_delete' => 'Only the owner can delete this group.',
+        'not_yours_to_rename' => 'Only the owner can rename this group.',
+        'not_yours_to_remove' => 'Only the owner can remove someone.',
     ],
 
     'conversation' => [
@@ -46,6 +64,7 @@ return [
 
     'notification' => [
         'open' => 'Open chat',
+        'invited_body' => 'Invited you to :group',
     ],
 
     'overlay' => [

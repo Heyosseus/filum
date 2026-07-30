@@ -5,12 +5,12 @@ declare(strict_types=1);
 return [
 
     'nav' => [
-        'chat' => 'ჩატი',
+        'chat' => 'ჩათი',
     ],
 
     'page' => [
-        'title' => 'ჩატი',
-        'heading' => 'ჩატი',
+        'title' => 'ჩათი',
+        'heading' => 'ჩათი',
     ],
 
     'sidebar' => [
@@ -24,6 +24,27 @@ return [
         'away' => 'გასული',
         'last_seen' => 'ბოლოს ნანახი :time',
         'never_seen' => 'არასდროს შემოსულა',
+        'invitations' => 'მოწვევები',
+        'groups' => 'ჯგუფები',
+        'new_group' => 'ახალი ჯგუფი',
+        'group_name' => 'ჯგუფის სახელი',
+        // Georgian nouns take no numeral agreement, so both branches read alike --
+        // spelled out rather than collapsed to one so the shape matches English and
+        // a translator can see nothing was forgotten.
+        'members' => '{1} :count წევრი|[2,*] :count წევრი',
+        'accept' => 'მიღება',
+        'decline' => 'უარი',
+        'invite' => 'მოწვევა',
+        'leave_group' => 'ჯგუფიდან გასვლა',
+        'delete_group' => 'ჯგუფის წაშლა',
+        'rename_group' => 'ჯგუფის სახელის შეცვლა',
+        'remove_member' => 'ამოშლა',
+        'pending' => 'მოლოდინში',
+        'invited_by' => ':name-ისგან',
+        'group_needs_name' => 'მიუთითეთ ჯგუფის სახელი.',
+        'not_yours_to_delete' => 'ჯგუფის წაშლა მხოლოდ მფლობელს შეუძლია.',
+        'not_yours_to_rename' => 'ჯგუფის სახელის შეცვლა მხოლოდ მფლობელს შეუძლია.',
+        'not_yours_to_remove' => 'წევრის ამოშლა მხოლოდ მფლობელს შეუძლია.',
     ],
 
     'conversation' => [
@@ -45,12 +66,13 @@ return [
     ],
 
     'notification' => [
-        'open' => 'ჩატის გახსნა',
+        'open' => 'ჩათის გახსნა',
+        'invited_body' => 'მოგიწვიათ ჯგუფში :group',
     ],
 
     'overlay' => [
-        'open' => 'ჩატის გახსნა',
-        'close' => 'ჩატის დახურვა',
+        'open' => 'ჩათის გახსნა',
+        'close' => 'ჩათის დახურვა',
         'unread' => ':count წაუკითხავი',
     ],
 

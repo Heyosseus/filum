@@ -121,6 +121,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Groups
+    |--------------------------------------------------------------------------
+    |
+    | Group conversations, joined by invitation. Any member may invite and anyone
+    | may leave; only the owner may remove someone else, rename or delete.
+    |
+    | Disabled means absent, as everywhere else in Filum: no board sections, no
+    | new-group field, and existing groups genuinely unreachable -- somebody who
+    | joined before the switch can no longer read, send or leave, because there is
+    | nothing there to read, send or leave. Every group action is refused. Nothing
+    | is deleted, so switching it back on restores what was there.
+    |
+    */
+
+    'groups' => [
+        'enabled' => env('FILUM_GROUPS', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Surfaces
     |--------------------------------------------------------------------------
     |

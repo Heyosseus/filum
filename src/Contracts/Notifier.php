@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Heyosseus\Filum\Contracts;
 
+use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
 use Illuminate\Contracts\Auth\Authenticatable;
 
@@ -23,4 +24,12 @@ interface Notifier
      * fails to ring is a smaller problem than a send button that appears broken.
      */
     public function messageSent(Message $message, Authenticatable $recipient): void;
+
+    /**
+     * Tell one recipient they have been invited to a group.
+     *
+     * Implementations must not throw, for the same reason messageSent must not:
+     * the invitation is already saved by the time this runs.
+     */
+    public function invited(Conversation $group, Authenticatable $recipient, Authenticatable $inviter): void;
 }

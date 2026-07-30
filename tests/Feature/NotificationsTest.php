@@ -79,6 +79,20 @@ it('stays quiet when notifications are switched off', function (): void {
         ->and(Message::query()->count())->toBe(1);
 });
 
+it('stays quiet about an invitation when notifications are switched off', function (): void {
+    config()->set('filum.notifications.enabled', false);
+    app()->forgetInstance(Notifier::class);
+
+    $groups = app(Heyosseus\Filum\Groups\Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+
+    // The invitation is still written -- switching the bell off silences the
+    // telling, not the thing being told about.
+    expect(bell($this->giorgi->id))->toBeEmpty()
+        ->and($group->participants()->where('user_id', $this->giorgi->id)->exists())->toBeTrue();
+});
+
 it('resolves the database notifier when notifications are on', function (): void {
     expect(app(Notifier::class))->toBeInstanceOf(DatabaseNotifier::class);
 });
@@ -111,6 +125,8 @@ it('keeps the message when a notifier throws', function (): void {
         {
             throw new RuntimeException('the pager exploded');
         }
+
+        public function invited(Heyosseus\Filum\Models\Conversation $group, Authenticatable $recipient, Authenticatable $inviter): void {}
     });
 
     app(Messages::class)->send($this->conversation, $this->nino, 'sent regardless');
@@ -118,4 +134,83 @@ it('keeps the message when a notifier throws', function (): void {
     expect(Message::query()->count())->toBe(1);
 
     Log::shouldHaveReceived('warning')->once();
+});
+
+it('rings the bell for someone invited to a group', function (): void {
+    $group = app(Heyosseus\Filum\Groups\Groups::class)->create($this->nino, 'Couriers');
+
+    app(Heyosseus\Filum\Groups\Groups::class)->invite($group, $this->nino, $this->giorgi->id);
+
+    $notification = bell($this->giorgi->id)[0];
+
+    expect($notification['title'])->toBe('Nino')
+        ->and($notification['body'])->toBe(__('filum::filum.notification.invited_body', ['group' => 'Couriers']));
+});
+
+it('keeps the invitation when the bell cannot be rung', function (): void {
+    Schema::drop('notifications');
+
+    $group = app(Heyosseus\Filum\Groups\Groups::class)->create($this->nino, 'Couriers');
+    app(Heyosseus\Filum\Groups\Groups::class)->invite($group, $this->nino, $this->giorgi->id);
+
+    // The invitation is the thing that matters; the bell is a courtesy.
+    expect($group->participants()->where('user_id', $this->giorgi->id)->exists())->toBeTrue();
+});
+
+it('keeps the invitation when a notifier throws', function (): void {
+    Log::spy();
+
+    app()->instance(Notifier::class, new class implements Notifier
+    {
+        public function messageSent(Message $message, Authenticatable $recipient): void {}
+
+        public function invited(Heyosseus\Filum\Models\Conversation $group, Authenticatable $recipient, Authenticatable $inviter): void
+        {
+            throw new RuntimeException('the pager exploded');
+        }
+    });
+
+    $groups = app(Heyosseus\Filum\Groups\Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+
+    expect($group->participants()->where('user_id', $this->giorgi->id)->exists())->toBeTrue();
+
+    Log::shouldHaveReceived('warning')->once();
+});
+
+it('stays quiet for a recipient who is present, leaving them the counter', function (): void {
+    app(Heyosseus\Filum\Presence\Heartbeat::class)->beat($this->giorgi);
+
+    app(Messages::class)->send($this->conversation, $this->nino, 'you are looking at this already');
+
+    // Nothing in the bell, but the unread count is still there -- somebody with
+    // the panel open sees the number on the colleague and on the overlay tab, so
+    // ringing as well would tell them the same fact twice.
+    expect(bell($this->giorgi->id))->toBeEmpty()
+        ->and(app(Messages::class)->unreadIn($this->conversation, $this->giorgi))->toBe(1);
+});
+
+it('rings for a recipient whose presence has lapsed', function (): void {
+    app(Heyosseus\Filum\Presence\Heartbeat::class)->beat($this->giorgi);
+
+    // Past the presence TTL, so the board would no longer show them as here.
+    $this->travel(config('filum.presence.ttl') + 10)->seconds();
+
+    app(Messages::class)->send($this->conversation, $this->nino, 'you missed this');
+
+    expect(bell($this->giorgi->id))->toHaveCount(1);
+});
+
+it('stays quiet about an invitation for someone who is present', function (): void {
+    app(Heyosseus\Filum\Presence\Heartbeat::class)->beat($this->giorgi);
+
+    $groups = app(Heyosseus\Filum\Groups\Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+
+    // The INVITATIONS section appears within a tick, because the fingerprint
+    // counts pending invitations.
+    expect(bell($this->giorgi->id))->toBeEmpty()
+        ->and($group->participants()->where('user_id', $this->giorgi->id)->value('state'))->toBe('invited');
 });

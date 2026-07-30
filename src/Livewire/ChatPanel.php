@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace Heyosseus\Filum\Livewire;
 
+use Heyosseus\Filum\Board\Board;
+use Heyosseus\Filum\Board\Boards;
 use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
-use Heyosseus\Filum\Conversations\ConversationKey;
 use Heyosseus\Filum\Conversations\Conversations;
+use Heyosseus\Filum\Exceptions\AlreadyInvited;
+use Heyosseus\Filum\Exceptions\NotAGroup;
+use Heyosseus\Filum\Exceptions\NotAParticipant;
+use Heyosseus\Filum\Exceptions\NotInvited;
+use Heyosseus\Filum\Exceptions\NotTheOwner;
 use Heyosseus\Filum\Exceptions\RateLimited;
 use Heyosseus\Filum\Filum;
+use Heyosseus\Filum\Groups\Groups;
 use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
@@ -37,8 +44,14 @@ final class ChatPanel extends Component
     /** Either 'page' or 'overlay'. */
     public string $mode = 'page';
 
-    /** The colleague whose conversation is open, as a string key. */
-    public ?string $selected = null;
+    /**
+     * The open conversation, direct or group.
+     *
+     * A conversation id rather than a user id: a group has no single other
+     * person, and unifying here takes the "who is the partner" special case out
+     * of every path that only needed to know which thread is open.
+     */
+    public ?int $conversation = null;
 
     /** Whether the overlay is expanded. Ignored in page mode. */
     public bool $open = false;
@@ -46,6 +59,12 @@ final class ChatPanel extends Component
     public string $body = '';
 
     public string $search = '';
+
+    /** What the board's new-group field holds, and where its refusals are shown. */
+    public string $groupName = '';
+
+    /** What the group header's rename field holds, and where its refusals are shown. */
+    public string $rename = '';
 
     /**
      * The oldest message to show, for scrollback. Null means the newest page.
@@ -64,6 +83,25 @@ final class ChatPanel extends Component
      */
     public string $seen = '';
 
+    /**
+     * conversation()'s answer for this request, and the id it answered for.
+     *
+     * Private, so Livewire neither serialises it nor carries it between requests:
+     * the memo is per request only, and a request is the longest a "which
+     * conversation is open, and may I see it" answer can safely be trusted for.
+     *
+     * Invalidated two ways, because this is the security seam and one way is not
+     * enough. The id is part of the key, so opening or closing a conversation
+     * cannot be answered from a memo about a different one; and forget() is called
+     * after every action that changes membership or existence, so an accept, a
+     * leave or a delete cannot be read past. The alternative -- memoising inside
+     * render() alone -- would leave the five or six calls an action makes
+     * un-memoised for no gain in safety.
+     */
+    private ?int $memoisedFor = null;
+
+    private ?Conversation $memoised = null;
+
     public function mount(string $mode = 'page'): void
     {
         $this->mode = $mode === 'overlay' ? 'overlay' : 'page';
@@ -73,8 +111,17 @@ final class ChatPanel extends Component
     {
         $user = $this->user();
         $thread = $this->thread();
-
         $descriptor = app(Transport::class)->descriptor();
+        $conversation = $this->conversation();
+
+        // Assembled outside the component: what the board shows is a question
+        // about the whole account, not about this one piece of chrome, and both
+        // modes ask it identically.
+        $board = $user instanceof Authenticatable
+            ? app(Boards::class)->for($user, $this->search)
+            : new Board([], [], [], []);
+
+        $group = $conversation instanceof Conversation && $conversation->isGroup() ? $conversation : null;
 
         // Recorded on the way out, so a tick always compares against what is
         // genuinely on screen rather than against a guess made somewhere else.
@@ -85,29 +132,125 @@ final class ChatPanel extends Component
         // know 'filum::…' is a real view-string, and the factory takes a plain one.
         return app(Factory::class)->make('filum::livewire.chat-panel', [
             'me' => $user,
-            'colleagues' => $user instanceof Authenticatable ? $this->colleagues($user) : collect(),
+            'board' => $board,
             'thread' => $thread,
             'partner' => $this->partner(),
+            'group' => $group,
+            'invitable' => $this->invitable($user, $group),
+            'roster' => $this->roster($user, $group),
+            'members' => $this->members($board, $group),
             'poll' => $descriptor['poll'],
             'driver' => $descriptor['driver'],
-            'conversationId' => $this->conversation()?->id,
+            'conversationId' => $conversation?->id,
             'hasOlder' => $this->hasOlder($thread),
         ]);
     }
 
     /**
-     * Open a conversation with a colleague.
+     * The colleagues who could still be asked into the open group.
+     *
+     * Asked only when there is a group open to ask about, so a board on its own
+     * costs nothing.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    private function invitable(?Authenticatable $user, ?Conversation $group): array
+    {
+        if (! $user instanceof Authenticatable || ! $group instanceof Conversation) {
+            return [];
+        }
+
+        return app(Boards::class)->invitableFor($user, $group);
+    }
+
+    /**
+     * Who the owner of the open group could remove.
+     *
+     * Empty for anyone but the owner, because removal is the owner's alone: a
+     * roster with no control against any row would be a list nobody could act on,
+     * and the header sits in a 26rem drawer where every line has to earn its place.
+     *
+     * @return list<array{id: string, name: string, pending: bool}>
+     */
+    private function roster(?Authenticatable $user, ?Conversation $group): array
+    {
+        if (! $user instanceof Authenticatable || ! $group instanceof Conversation) {
+            return [];
+        }
+
+        if ((string) $group->owner_id !== (string) app(UserProvider::class)->id($user)) {
+            return [];
+        }
+
+        return app(Boards::class)->rosterFor($user, $group);
+    }
+
+    /**
+     * How many people are in the open group, read off the board rather than
+     * counted again: the board already asked, and two answers can disagree.
+     *
+     * Zero when nothing is open, and zero as the fallback if the open group is
+     * somehow not on the board -- which, now that a group only resolves at all
+     * when the viewer has joined it and groups are switched on, is a shape the
+     * types still allow rather than a state anything can reach.
+     */
+    private function members(Board $board, ?Conversation $group): int
+    {
+        if (! $group instanceof Conversation) {
+            return 0;
+        }
+
+        return array_column($board->groups, 'members', 'id')[$group->id] ?? 0;
+    }
+
+    /**
+     * Open the direct conversation with a colleague, creating it on first open.
      */
     public function selectUser(string $id): void
     {
-        $this->selected = $id;
+        $me = $this->user();
+        $users = app(UserProvider::class);
+        $partner = $users->find($id);
+
+        if (! $me instanceof Authenticatable || ! $partner instanceof Authenticatable) {
+            return;
+        }
+
+        $this->open(app(Conversations::class)->between($users->id($me), $users->id($partner)));
+    }
+
+    /**
+     * Open a conversation by id -- how a group is opened, and how the board
+     * addresses anything that is not a person.
+     */
+    public function selectConversation(int $id): void
+    {
+        $me = $this->user();
+        $conversation = Conversation::query()->find($id);
+
+        if (! $me instanceof Authenticatable || ! $conversation instanceof Conversation) {
+            return;
+        }
+
+        // Membership, not merely existence: this is a public Livewire method, so
+        // the id arrives from the browser. A stale id from an old page is turned
+        // away in silence rather than thrown at somebody as an error.
+        if (! $conversation->includes(app(UserProvider::class)->id($me))) {
+            return;
+        }
+
+        $this->open($conversation);
+    }
+
+    private function open(Conversation $conversation): void
+    {
+        $this->conversation = $conversation->id;
         $this->from = null;
         $this->clearComposer();
 
-        $conversation = $this->conversation();
         $me = $this->user();
 
-        if ($conversation instanceof Conversation && $me instanceof Authenticatable) {
+        if ($me instanceof Authenticatable) {
             app(Messages::class)->markRead($conversation, $me);
         }
     }
@@ -120,7 +263,7 @@ final class ChatPanel extends Component
      */
     public function deselect(): void
     {
-        $this->selected = null;
+        $this->conversation = null;
         $this->from = null;
         $this->clearComposer();
     }
@@ -128,6 +271,224 @@ final class ChatPanel extends Component
     public function toggle(): void
     {
         $this->open = ! $this->open;
+    }
+
+    /**
+     * Start a group from the board's inline field and open it.
+     *
+     * Every group action below catches its typed failure and either tells the
+     * person or does nothing: all of them are reachable from a browser-supplied
+     * id, so none of them may reach an error page.
+     */
+    public function createGroup(): void
+    {
+        $me = $this->user();
+
+        if (! $me instanceof Authenticatable) {
+            return;
+        }
+
+        try {
+            $group = app(Groups::class)->create($me, $this->groupName);
+        } catch (InvalidArgumentException) {
+            $this->addError('groupName', __('filum::filum.sidebar.group_needs_name'));
+
+            return;
+        } catch (NotAGroup) {
+            return;
+        }
+
+        $this->clearGroupName();
+        $this->open($group);
+    }
+
+    /**
+     * Empty the new-group field, on the server and in the browser.
+     *
+     * The same problem the composer has, for the same reason: the input carries
+     * wire:ignore so that a poll cannot morph a half-typed name back to the
+     * server's empty string, which also means emptying the property is not enough
+     * on its own -- the browser has to be told, and only once a group was made.
+     */
+    private function clearGroupName(): void
+    {
+        $this->groupName = '';
+        $this->dispatch('filum-group-name-cleared');
+    }
+
+    public function acceptInvitation(int $id): void
+    {
+        $this->respondToInvitation($id, true);
+    }
+
+    public function declineInvitation(int $id): void
+    {
+        $this->respondToInvitation($id, false);
+    }
+
+    private function respondToInvitation(int $id, bool $accept): void
+    {
+        $me = $this->user();
+        $group = Conversation::query()->find($id);
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            $accept
+                ? app(Groups::class)->accept($group, $me)
+                : app(Groups::class)->decline($group, $me);
+        } catch (NotInvited|NotAGroup) {
+            return;
+        }
+
+        $this->forget();
+
+        if ($accept) {
+            $this->open($group);
+        }
+    }
+
+    public function inviteToGroup(string $userId): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            // InvalidArgumentException among them because the id comes from the
+            // browser: a forged one that names nobody is turned away in silence
+            // rather than written as a row nobody could ever accept or withdraw.
+            app(Groups::class)->invite($group, $me, $userId);
+        } catch (AlreadyInvited|NotAParticipant|NotAGroup|InvalidArgumentException) {
+            return;
+        }
+
+        $this->forget();
+    }
+
+    /**
+     * Rename the open group from the header's inline field. Owner only.
+     */
+    public function renameGroup(): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->rename($group, $me, $this->rename);
+        } catch (InvalidArgumentException) {
+            $this->addError('rename', __('filum::filum.sidebar.group_needs_name'));
+
+            return;
+        } catch (NotTheOwner) {
+            // Keyed 'group' for the same reason deleteGroup's refusal is: it belongs
+            // beside the control that was pressed, and that control is in the header.
+            $this->addError('group', __('filum::filum.sidebar.not_yours_to_rename'));
+
+            return;
+        } catch (NotAGroup) {
+            return;
+        }
+
+        $this->clearRename();
+        $this->forget();
+    }
+
+    /**
+     * Empty the rename field, on the server and in the browser.
+     *
+     * wire:ignore on the input for the reason the composer and the new-group field
+     * carry it -- a poll morphs a half-typed name back to the server's empty
+     * string -- which means the browser has to be told separately, and only once a
+     * rename actually took.
+     */
+    private function clearRename(): void
+    {
+        $this->rename = '';
+        $this->dispatch('filum-group-renamed');
+    }
+
+    /**
+     * Put somebody out of the open group, or withdraw their invitation. Owner only.
+     */
+    public function removeMember(string $userId): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->remove($group, $me, $userId);
+        } catch (NotTheOwner) {
+            $this->addError('group', __('filum::filum.sidebar.not_yours_to_remove'));
+
+            return;
+        } catch (NotAParticipant|NotAGroup|InvalidArgumentException) {
+            // InvalidArgumentException is an owner aimed at themselves. The roster
+            // never renders a control against the owner, so this is only reachable
+            // from a forged call, and an owner who wants out has Leave group.
+            return;
+        }
+
+        $this->forget();
+    }
+
+    public function leaveGroup(): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->leave($group, $me);
+        } catch (NotAParticipant|NotAGroup) {
+            return;
+        }
+
+        $this->forget();
+        $this->deselect();
+    }
+
+    public function deleteGroup(): void
+    {
+        $me = $this->user();
+        $group = $this->conversation();
+
+        if (! $me instanceof Authenticatable || ! $group instanceof Conversation) {
+            return;
+        }
+
+        try {
+            app(Groups::class)->delete($group, $me);
+        } catch (NotTheOwner) {
+            // Keyed 'group' rather than 'groupName', and rendered in the group
+            // header: groupName's error block lives in the board, and the drawer
+            // swaps the board out while a thread is open -- so the refusal would
+            // arrive in a pane nobody is looking at.
+            $this->addError('group', __('filum::filum.sidebar.not_yours_to_delete'));
+
+            return;
+        } catch (NotAGroup) {
+            return;
+        }
+
+        $this->forget();
+        $this->deselect();
     }
 
     /**
@@ -264,44 +625,12 @@ final class ChatPanel extends Component
                 : '',
             (string) app(Messages::class)->unreadTotal($user),
             implode(',', array_map(strval(...), app(PresenceStore::class)->active())),
+            // Without this a quiet tick would skip rendering and a new invitation
+            // would not appear until something else changed -- the skip-render
+            // that protects the composer would swallow the one thing invitations
+            // exist to deliver.
+            (string) app(Groups::class)->invitationsFor($user)->count(),
         ]);
-    }
-
-    /**
-     * The colleagues to list, with presence and unread counts attached.
-     *
-     * @return Collection<int, array{id: string, name: string, avatar: string|null, online: bool, unread: int}>
-     */
-    private function colleagues(Authenticatable $me): Collection
-    {
-        $users = app(UserProvider::class);
-        $active = app(PresenceStore::class)->active();
-        $messages = app(Messages::class);
-
-        $search = mb_strtolower(trim($this->search));
-
-        return $users->chattable($me)
-            ->map(function (Authenticatable $colleague) use ($users, $active, $messages, $me): array {
-                $id = $users->id($colleague);
-
-                // Reading the unread count needs the conversation, but listing a
-                // colleague must never create one -- otherwise merely opening the
-                // sidebar would write a row per person.
-                $key = ConversationKey::for([$users->id($me), $id]);
-                $conversation = Conversation::query()->where('key', $key)->first();
-
-                return [
-                    'id' => (string) $id,
-                    'name' => $users->name($colleague),
-                    'avatar' => $users->avatar($colleague),
-                    'online' => in_array($id, $active, true),
-                    'unread' => $conversation instanceof Conversation
-                        ? $messages->unreadIn($conversation, $me)
-                        : 0,
-                ];
-            })
-            ->filter(fn (array $row): bool => $search === '' || str_contains(mb_strtolower($row['name']), $search))
-            ->values();
     }
 
     /**
@@ -320,26 +649,98 @@ final class ChatPanel extends Component
         return app(Messages::class)->page($conversation, $this->from);
     }
 
+    /**
+     * The other person in a direct conversation. A group has none.
+     *
+     * Read off the participants rather than off a selected user id, because
+     * there is no longer a selected user: the conversation is what is open.
+     */
     private function partner(): ?Authenticatable
     {
-        return $this->selected === null ? null : app(UserProvider::class)->find($this->selected);
-    }
-
-    /**
-     * The conversation with the selected colleague, created on first open.
-     */
-    private function conversation(): ?Conversation
-    {
+        $conversation = $this->conversation();
         $me = $this->user();
-        $partner = $this->partner();
 
-        if (! $me instanceof Authenticatable || ! $partner instanceof Authenticatable) {
+        if (! $conversation instanceof Conversation || $conversation->isGroup() || ! $me instanceof Authenticatable) {
             return null;
         }
 
         $users = app(UserProvider::class);
+        $otherId = $conversation->participants()
+            ->whereNot('user_id', $users->id($me))
+            ->value('user_id');
 
-        return app(Conversations::class)->between($users->id($me), $users->id($partner));
+        return $otherId === null ? null : $users->find((string) $otherId);
+    }
+
+    /**
+     * The open conversation, re-read each call so a deleted group falls away --
+     * and only if the viewer is actually in it.
+     *
+     * $conversation is a public Livewire property, so the browser can set it to any
+     * integer it likes. Existence is not permission: without the membership check
+     * a forged id would render somebody else's thread, message bodies and all,
+     * into the response. Guarding it here rather than at each caller is the point,
+     * because every read goes through this one seam -- thread(), hasOlder(),
+     * partner(), render()'s group, send(), received(), tick(), the fingerprint and
+     * all three owner actions -- and a seam is the only place a check cannot be
+     * forgotten.
+     *
+     * selectConversation() keeps its own identical check: that one stops a bad id
+     * from ever being stored, this one stops a stored bad id from being read, and
+     * neither depends on the other being right.
+     *
+     * Null rather than an exception, like everything else here: a stale id from an
+     * old page is turned away in silence.
+     */
+    private function conversation(): ?Conversation
+    {
+        if ($this->conversation === null) {
+            return null;
+        }
+
+        if ($this->memoisedFor === $this->conversation) {
+            return $this->memoised;
+        }
+
+        $this->memoisedFor = $this->conversation;
+
+        return $this->memoised = $this->resolve($this->conversation);
+    }
+
+    /**
+     * The uncached answer: does this id name a conversation this viewer is in?
+     */
+    private function resolve(int $id): ?Conversation
+    {
+        $me = $this->user();
+        $conversation = Conversation::query()->find($id);
+
+        if (! $conversation instanceof Conversation || ! $me instanceof Authenticatable) {
+            return null;
+        }
+
+        // A group nobody is meant to be able to reach. Membership survives the
+        // switch, so without this a joined member could still read the thread, send
+        // into it and broadcast from it while the configuration says groups do not
+        // exist -- and could not even leave, because leaving is refused. Absent,
+        // like everywhere else in Filum.
+        if ($conversation->isGroup() && ! app(Groups::class)->enabled()) {
+            return null;
+        }
+
+        // Joined, not merely present as a row: the same narrowing Conversation
+        // ::includes applies for broadcast authorization and the send path, so a
+        // pending invitee cannot read a thread they have not accepted either.
+        return $conversation->includes(app(UserProvider::class)->id($me)) ? $conversation : null;
+    }
+
+    /**
+     * Drop the memo, so the next read goes back to the database.
+     */
+    private function forget(): void
+    {
+        $this->memoisedFor = null;
+        $this->memoised = null;
     }
 
     private function user(): ?Authenticatable

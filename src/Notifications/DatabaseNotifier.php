@@ -8,6 +8,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Heyosseus\Filum\Contracts\Notifier;
 use Heyosseus\Filum\Contracts\UserProvider;
+use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
 use Heyosseus\Filum\Pages\Chat;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -49,10 +50,34 @@ final class DatabaseNotifier implements Notifier
 
         $sender = $this->users->find((string) $message->sender_id);
 
+        $this->ring(
+            $sender instanceof Authenticatable ? $this->users->name($sender) : '',
+            $this->excerpt($message->body),
+            'heroicon-o-chat-bubble-left-ellipsis',
+            $recipient,
+        );
+    }
+
+    public function invited(Conversation $group, Authenticatable $recipient, Authenticatable $inviter): void
+    {
+        if (! $this->canNotify($recipient)) {
+            return;
+        }
+
+        $this->ring(
+            $this->users->name($inviter),
+            __('filum::filum.notification.invited_body', ['group' => (string) $group->name]),
+            'heroicon-o-user-plus',
+            $recipient,
+        );
+    }
+
+    private function ring(string $title, string $body, string $icon, Authenticatable $recipient): void
+    {
         Notification::make()
-            ->title($sender instanceof Authenticatable ? $this->users->name($sender) : '')
-            ->body($this->excerpt($message->body))
-            ->icon('heroicon-o-chat-bubble-left-ellipsis')
+            ->title($title)
+            ->body($body)
+            ->icon($icon)
             ->actions($this->actions())
             ->sendToDatabase($recipient);
     }
