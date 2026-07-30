@@ -285,3 +285,35 @@ it('refuses a deletion by anyone but the owner', function (): void {
 
     $this->groups->delete($group, $this->giorgi);
 })->throws(NotTheOwner::class);
+
+it('lists the groups you have joined, busiest first', function (): void {
+    $quiet = $this->groups->create($this->nino, 'Quiet');
+    $busy = $this->groups->create($this->nino, 'Busy');
+    $busy->forceFill(['last_message_at' => now()])->save();
+
+    $theirs = $this->groups->create($this->giorgi, 'Not Mine');
+    $this->groups->invite($theirs, $this->giorgi, $this->nino->id);
+
+    $names = $this->groups->for($this->nino)->pluck('name')->all();
+
+    // Ordered by activity, and a group you were only invited to is not yours yet.
+    expect($names)->toBe(['Busy', 'Quiet']);
+});
+
+it('lists the invitations waiting for you', function (): void {
+    $group = $this->groups->create($this->giorgi, 'Couriers');
+    $this->groups->invite($group, $this->giorgi, $this->nino->id);
+
+    expect($this->groups->invitationsFor($this->nino)->pluck('name')->all())->toBe(['Couriers'])
+        ->and($this->groups->invitationsFor($this->giorgi))->toBeEmpty();
+});
+
+it('shows no groups or invitations when groups are switched off', function (): void {
+    $group = $this->groups->create($this->nino, 'Couriers');
+    $this->groups->invite($group, $this->nino, $this->giorgi->id);
+
+    config()->set('filum.groups.enabled', false);
+
+    expect($this->groups->for($this->nino))->toBeEmpty()
+        ->and($this->groups->invitationsFor($this->giorgi))->toBeEmpty();
+});

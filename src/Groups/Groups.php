@@ -15,6 +15,9 @@ use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Participant;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -155,6 +158,54 @@ final readonly class Groups
         $this->assertOwner($group, $actor);
 
         $group->delete();
+    }
+
+    /**
+     * The groups this user has joined, most recently active first.
+     *
+     * @return Collection<int, Conversation>
+     */
+    public function for(Authenticatable $user): Collection
+    {
+        return $this->listing($user, 'joined')
+            // COALESCE rather than a plain order: a group created a moment ago has
+            // no last_message_at, and DESC would sort those NULLs to opposite ends
+            // on Postgres and SQLite.
+            ->orderByDesc(DB::raw('coalesce(last_message_at, created_at)'))
+            // Timestamp columns store only whole seconds, so two groups touched
+            // within the same second tie on the line above. Break the tie by id,
+            // since a higher id was created later.
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, Conversation>
+     */
+    public function invitationsFor(Authenticatable $user): Collection
+    {
+        return $this->listing($user, 'invited')->orderBy('name')->get();
+    }
+
+    /**
+     * @return Builder<Conversation>
+     */
+    private function listing(Authenticatable $user, string $state): Builder
+    {
+        $query = Conversation::query()->where('kind', 'group');
+
+        if ($this->config->get('filum.groups.enabled', true) !== true) {
+            // Absent, not merely hidden: nothing downstream has to know groups
+            // were switched off.
+            return $query->whereRaw('1 = 0');
+        }
+
+        $userId = $this->users->id($user);
+
+        return $query->whereHas(
+            'participants',
+            fn (Builder $participants): Builder => $participants->where('user_id', $userId)->where('state', $state),
+        );
     }
 
     /**
