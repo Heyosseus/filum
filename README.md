@@ -113,6 +113,14 @@ It rings **once per conversation**, on the transition from caught up to behind. 
 forty-message burst is one bell entry, not forty; catching up and falling behind
 again earns a fresh one.
 
+It also rings only for a recipient who is **not currently present**. Someone with
+the panel open already sees the unread counter change on the colleague, on the
+group, and on the overlay tab, so a bell as well would only tell them what they
+can already see. "Present" is exactly the set the board shows as `HERE NOW`, so
+the bell and the board never disagree — tune it with `presence.ttl`, below. This
+applies to invitations too: inviting someone who is at their desk right now grows
+the invitations section for them on the next tick and never rings.
+
 ```php
 'notifications' => [
     'enabled' => env('FILUM_NOTIFICATIONS', true),
@@ -128,6 +136,42 @@ somewhere else entirely (mail, Slack, a pager), implement
 $this->app->singleton(Heyosseus\Filum\Contracts\Notifier::class, MyNotifier::class);
 ```
 
+## Groups
+
+Beyond 1:1 chat, colleagues can form a group. Joining is always by invitation:
+creating a group only seats the creator, who becomes its owner; everyone else
+appears in the invitations section of their own board and has to accept before
+the thread, the send path or the broadcast channel will admit them. Declining
+and leaving land on the same state, so a colleague who said no and a colleague
+who walked away look identical to the group afterwards.
+
+Permissions are flat with one exception for the owner:
+
+- **Any member** may invite a colleague.
+- **Anyone** may leave.
+- **Only the owner** may remove someone else, rename the group, or delete it.
+
+An owner does not remove themselves — they leave, like anyone else. When they
+do, ownership passes automatically to whoever has been joined the longest (ties
+broken by who joined first, i.e. the lower participant id). If nobody is left
+joined, the group is deleted rather than left ownerless.
+
+The group's thread header carries an invite picker: a disclosure listing
+colleagues who are neither invited nor already joined, so growing the group is a
+click from the thread itself. Someone who has left reappears in that list —
+leaving does not blacklist a person, it just returns them to "not yet invited."
+
+```php
+'groups' => [
+    'enabled' => env('FILUM_GROUPS', true),
+],
+```
+
+Disabled means absent, the same as the panel-wide switch below: no groups
+section on the board, no new-group action, existing groups unreachable, and
+every group action refused — not a feature that half-works underneath a
+switched-off UI.
+
 ## Presence
 
 The sidebar shows who is around. A heartbeat writes `last_seen_at` on an
@@ -142,6 +186,19 @@ minute of latency.
     'ttl' => 180,               // how long a beat counts as "here"
 ],
 ```
+
+`ttl` is also what decides whether the notification bell rings, above — and it
+is deliberately the only knob for that decision. It would be easy to add a
+second, shorter threshold just for notifications ("ring if silent for 30s even
+if the board still shows them as here"), but that threshold could then disagree
+with what the board displays: a colleague marked `HERE NOW` who nonetheless gets
+a bell, which reads as a bug even though it would be working as configured. One
+number, shared by both, means the bell and the board can never contradict each
+other — the honest cost is that `ttl`'s default of 180 seconds means someone who
+closes their laptop and is written to thirty seconds later still counts as
+present, and gets no bell for it. Lower `ttl` if that lag matters more to you
+than a slightly twitchier "here" indicator; there is no separate way to tune one
+without the other.
 
 ## Your user model
 

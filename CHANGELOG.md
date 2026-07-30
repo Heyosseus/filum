@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Added
+
+- Group conversations, joined by invitation. Any member may invite, anyone may
+  leave, and only the owner may remove someone, rename or delete. An invitation is
+  pending until accepted, so nobody is silently subscribed to a conversation.
+- An invite picker on the group thread header: a disclosure listing colleagues not
+  already invited or joined, so populating a group is a click from the thread
+  itself rather than a separate screen. Someone who has left becomes invitable
+  again from the same list.
+- Invitations ring Filament's notification bell.
+- `filum.groups.enabled` switches the whole feature off; disabled means absent.
+
+### Fixed
+
+- `ChatPanel::$conversation` is a public Livewire property, so a browser could set
+  it to any conversation id and every read path — the thread, the group header,
+  the member count, scrollback, the unread fingerprint — would render whatever it
+  found. Writes and broadcasts were already gated by membership; reads were not.
+  Every read path now goes through the same membership check, so a conversation
+  the viewer has not joined renders nothing, the same as if it did not exist.
+
+### Changed
+
+- The bell now rings only for recipients who are **not currently present**.
+  Somebody with the panel open already sees the unread count on the colleague, on
+  the group and on the overlay tab, so a notification as well told them the same
+  thing twice and accumulated a list to clear. "Present" is the same set the board
+  shows as `HERE NOW`, so the two always agree; tune it with `presence.ttl`.
+  Applies to invitations too.
+
+- **Breaking.** `Notifier` gains `invited(Conversation $group, Authenticatable $recipient, Authenticatable $inviter): void`.
+  Applications implementing the contract themselves must add it.
+- **Breaking.** `Conversation::includes()` now means *joined*, not merely present.
+  This is what keeps a pending invitee out of the thread, the send path and the
+  broadcast channel. Anything relying on the old meaning changes behaviour.
+- `ChatPanel` selects a conversation rather than a user, and board assembly moved
+  to `Heyosseus\Filum\Board\Boards`.
+
+### Upgrading
+
+```bash
+composer update heyosseus/filum
+php artisan vendor:publish --tag=filum-migrations
+php artisan migrate
+```
+
+Existing direct conversations are unaffected: the new columns default to `direct`
+and `joined`.
+
 ## [0.1.1]
 
 ### Changed
