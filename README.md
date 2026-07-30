@@ -91,6 +91,31 @@ Filum::auth(fn ($user) => $user->hasRole('admin'));
 One gate governs everything — the page, the overlay, and the broadcast channels —
 so nobody can subscribe to a conversation the page would not have shown them.
 
+## Notifications
+
+A message to someone who is not looking rings Filament's own notification bell,
+writing into the application's existing `notifications` table. No broadcaster
+needed — Filament polls the bell.
+
+It rings **once per conversation**, on the transition from caught up to behind. A
+forty-message burst is one bell entry, not forty; catching up and falling behind
+again earns a fresh one.
+
+```php
+'notifications' => [
+    'enabled' => env('FILUM_NOTIFICATIONS', true),
+],
+```
+
+Where the `notifications` table has never been migrated, or your user model is
+not `Notifiable`, this quietly does nothing — the message still sends. To deliver
+somewhere else entirely (mail, Slack, a pager), implement
+`Heyosseus\Filum\Contracts\Notifier` and bind it:
+
+```php
+$this->app->singleton(Heyosseus\Filum\Contracts\Notifier::class, MyNotifier::class);
+```
+
 ## Presence
 
 The sidebar shows who is around. A heartbeat writes `last_seen_at` on an

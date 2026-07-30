@@ -96,6 +96,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Notifications
+    |--------------------------------------------------------------------------
+    |
+    | A message to someone who is not looking rings Filament's own notification
+    | bell, using the application's existing notifications table. No broadcaster
+    | is needed: Filament polls the bell.
+    |
+    | One notification per conversation, sent when a recipient goes from caught up
+    | to behind. A busy thread therefore rings once rather than forty times, and
+    | rings again once they have caught up. Where the table has never been
+    | migrated, or the user model is not notifiable, this quietly does nothing.
+    |
+    */
+
+    'notifications' => [
+        'enabled' => env('FILUM_NOTIFICATIONS', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Surfaces
     |--------------------------------------------------------------------------
     |

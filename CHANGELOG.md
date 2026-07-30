@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `filum:install` command; publishable config, migrations, translations and views.
 - English and Georgian translations, both complete.
 - Support for Filament 4 and 5 (Livewire 3 and 4) behind a single `Compat` seam.
+- Filament database notifications for messages the recipient was not on screen
+  for, via a pluggable `Notifier` contract. One per conversation, on the
+  transition from caught up to behind, so a burst rings once.
 
 ### Fixed
 

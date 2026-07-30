@@ -44,6 +44,10 @@ return [
         'empty' => 'Write something first.',
     ],
 
+    'notification' => [
+        'open' => 'Open chat',
+    ],
+
     'overlay' => [
         'open' => 'Open chat',
         'close' => 'Close chat',

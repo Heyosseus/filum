@@ -67,6 +67,18 @@ abstract class TestCase extends Orchestra
             $table->string('email')->nullable();
         });
 
+        // Laravel's notifications table, as an application that has opted into
+        // Filament's notification bell would have it. Tests that cover the case
+        // where it was never migrated drop it again.
+        Schema::create('notifications', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+            $table->string('type');
+            $table->morphs('notifiable');
+            $table->text('data');
+            $table->timestamp('read_at')->nullable();
+            $table->timestamps();
+        });
+
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
     }
 

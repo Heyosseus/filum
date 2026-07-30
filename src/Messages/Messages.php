@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Heyosseus\Filum\Messages;
 
 use Carbon\CarbonImmutable;
+use Heyosseus\Filum\Contracts\Notifier;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Conversations\Conversations;
@@ -29,6 +30,7 @@ final readonly class Messages
         private Conversations $conversations,
         private UserProvider $users,
         private Transport $transport,
+        private Notifier $notifier,
         private RateLimiter $limiter,
         private Repository $config,
         private LoggerInterface $logger,
@@ -75,8 +77,54 @@ final readonly class Messages
         });
 
         $this->announce($message);
+        $this->notify($message, $conversation, $senderId);
 
         return $message;
+    }
+
+    /**
+     * Ring the bell for everyone in the conversation who has fallen behind.
+     *
+     * Only on the transition. If a recipient was caught up and this message is
+     * now their one unread, they are told; if they were already behind they have
+     * been told, and a second, third and fourth notification for the same thread
+     * would bury the bell rather than fill it. Catching up and falling behind
+     * again earns a fresh one.
+     */
+    private function notify(Message $message, Conversation $conversation, int|string $senderId): void
+    {
+        Participant::query()
+            ->where('conversation_id', $conversation->id)
+            ->whereNot('user_id', $senderId)
+            ->get()
+            ->each(function (Participant $participant) use ($message): void {
+                $unread = $this->unreadQuery(
+                    $participant->conversation_id,
+                    $participant->user_id,
+                    $participant->last_read_message_id,
+                )->count();
+
+                if ($unread !== 1) {
+                    return;
+                }
+
+                // Guarded per recipient, and here rather than inside the notifier:
+                // Notifier is a public contract, so an application may implement it
+                // against a pager or a chat bot of its own, and a bug in that
+                // implementation must neither lose the message nor rob the other
+                // recipients of theirs.
+                try {
+                    $recipient = $this->users->find((string) $participant->user_id);
+
+                    if ($recipient instanceof Authenticatable) {
+                        $this->notifier->messageSent($message, $recipient);
+                    }
+                } catch (Throwable $e) {
+                    $this->logger->warning('Filum could not notify a recipient of a sent message.', [
+                        'exception' => $e,
+                    ]);
+                }
+            });
     }
 
     /**

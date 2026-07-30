@@ -8,10 +8,13 @@ use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentView;
 use Heyosseus\Filum\Console\Commands\InstallCommand;
+use Heyosseus\Filum\Contracts\Notifier;
 use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Livewire\ChatPanel;
+use Heyosseus\Filum\Notifications\DatabaseNotifier;
+use Heyosseus\Filum\Notifications\NullNotifier;
 use Heyosseus\Filum\Presence\DatabasePresenceStore;
 use Heyosseus\Filum\Support\Compat;
 use Heyosseus\Filum\Transport\TransportManager;
@@ -53,6 +56,12 @@ final class FilumServiceProvider extends ServiceProvider
         // The manager decides between broadcasting and polling once per request,
         // rather than at every call site that wants to announce something.
         $this->app->singleton(Transport::class, fn (Application $app): Transport => $app->make(TransportManager::class)->driver());
+
+        // Switched off means bound to a notifier that does nothing, so the send
+        // path never asks whether it should be telling anyone.
+        $this->app->singleton(Notifier::class, fn (Application $app): Notifier => $app->make(Repository::class)->get('filum.notifications.enabled', true)
+            ? $app->make(DatabaseNotifier::class)
+            : $app->make(NullNotifier::class));
     }
 
     /**
