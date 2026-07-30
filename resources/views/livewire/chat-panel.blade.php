@@ -1,14 +1,21 @@
 {{-- The one chat. $mode decides the chrome around it and nothing else. --}}
-@php($unread = $colleagues->sum('unread'))
-@php($partnerOnline = (bool) ($colleagues->firstWhere('id', $selected)['online'] ?? false))
+@php($unread = collect($board->here)->sum('unread') + collect($board->away)->sum('unread') + collect($board->groups)->sum('unread'))
+
+{{--
+    Presence is which section a person is in rather than a flag on the row, so
+    the partner's state is read back out of the board the sidebar is drawn from --
+    one answer to "who is here", not two that can disagree.
+--}}
+@php($partnerId = $partner === null ? null : (string) app(\Heyosseus\Filum\Contracts\UserProvider::class)->id($partner))
+@php($partnerOnline = $partnerId !== null && collect($board->here)->contains('id', $partnerId))
 
 {{--
     In page mode both panes are on screen. In the drawer only one is, because two
     panes inside 26rem is two panes nobody can use: the board stands in until a
-    colleague is picked, and the thread header carries the way back.
+    conversation is picked, and the thread header carries the way back.
 --}}
-@php($showBoard = $mode === 'page' || $selected === null)
-@php($showThread = $mode === 'page' || $selected !== null)
+@php($showBoard = $mode === 'page' || $conversationId === null)
+@php($showThread = $mode === 'page' || $conversationId !== null)
 
 {{--
     Under a broadcaster the browser also listens, so a message appears the moment
@@ -64,12 +71,16 @@
     @if ($mode === 'page' || $open)
         <div class="filum-panel">
             @if ($showBoard)
-                @include('filum::partials.sidebar', ['colleagues' => $colleagues])
+                @include('filum::partials.sidebar', [
+                    'board' => $board,
+                    'conversationId' => $conversationId,
+                    'partnerId' => $partnerId,
+                ])
             @endif
 
             @if ($showThread)
                 <section class="filum-conversation">
-                    @if ($partner === null)
+                    @if ($partner === null && $group === null)
                         <p class="filum-empty">{{ __('filum::filum.conversation.none_selected') }}</p>
                     @else
                         @include('filum::partials.thread', [
@@ -77,6 +88,7 @@
                             'me' => $me,
                             'partner' => $partner,
                             'partnerOnline' => $partnerOnline,
+                            'group' => $group,
                             'hasOlder' => $hasOlder,
                         ])
 

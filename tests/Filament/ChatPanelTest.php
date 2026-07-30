@@ -29,12 +29,13 @@ it('invites you to choose someone before a conversation is open', function (): v
 });
 
 it('opens a conversation when a colleague is chosen', function (): void {
-    Livewire::test(ChatPanel::class)
+    $panel = Livewire::test(ChatPanel::class)
         ->call('selectUser', (string) $this->giorgi->id)
-        ->assertSet('selected', (string) $this->giorgi->id)
         ->assertSee(__('filum::filum.conversation.empty'));
 
     expect(Conversation::query()->count())->toBe(1);
+
+    $panel->assertSet('conversation', Conversation::query()->firstOrFail()->id);
 });
 
 it('does not create a conversation merely by listing colleagues', function (): void {
@@ -130,7 +131,7 @@ it('leaves a conversation and clears what was being written', function (): void 
         ->call('selectUser', (string) $this->giorgi->id)
         ->set('body', 'half a thought')
         ->call('deselect')
-        ->assertSet('selected', null)
+        ->assertSet('conversation', null)
         ->assertSet('body', '')
         ->assertSet('from', null);
 });
@@ -167,7 +168,7 @@ it('marks an open conversation read when a broadcast arrives', function (): void
 });
 
 it('receives harmlessly with nothing open', function (): void {
-    Livewire::test(ChatPanel::class)->call('received')->assertSet('selected', null);
+    Livewire::test(ChatPanel::class)->call('received')->assertSet('conversation', null);
 });
 
 it('records presence on every tick', function (): void {
@@ -300,4 +301,58 @@ it('shows nothing to an unauthorised viewer', function (): void {
     config()->set('filum.enabled', false);
 
     Livewire::test(ChatPanel::class)->assertDontSee('Giorgi');
+});
+
+it('selects a conversation rather than a person', function (): void {
+    $panel = Livewire::test(ChatPanel::class)->call('selectUser', (string) $this->giorgi->id);
+
+    $conversation = Conversation::query()->firstOrFail();
+
+    $panel->assertSet('conversation', $conversation->id);
+});
+
+it('opens a group it is a member of', function (): void {
+    $groups = app(Heyosseus\Filum\Groups\Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    app(Messages::class)->send($group, $this->nino, 'shift starts at six');
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->assertSet('conversation', $group->id)
+        ->assertSee('Couriers')
+        ->assertSee('shift starts at six');
+});
+
+it('refuses to open a conversation it is not in', function (): void {
+    $group = app(Heyosseus\Filum\Groups\Groups::class)->create($this->giorgi, 'Theirs');
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->assertSet('conversation', null);
+});
+
+it('refuses to open a conversation that does not exist', function (): void {
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', 987654)
+        ->assertSet('conversation', null);
+});
+
+it('opens nothing for a colleague who no longer exists', function (): void {
+    Livewire::test(ChatPanel::class)
+        ->call('selectUser', '987654')
+        ->assertSet('conversation', null);
+
+    expect(Conversation::query()->count())->toBe(0);
+});
+
+it('names each speaker in a group thread', function (): void {
+    $groups = app(Heyosseus\Filum\Groups\Groups::class);
+    $group = $groups->create($this->nino, 'Couriers');
+    $groups->invite($group, $this->nino, $this->giorgi->id);
+    $groups->accept($group, $this->giorgi);
+    app(Messages::class)->send($group, $this->giorgi, 'on my way');
+
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $group->id)
+        ->assertSeeInOrder(['Giorgi', 'on my way']);
 });

@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Heyosseus\Filum\Livewire;
 
+use Heyosseus\Filum\Board\Board;
+use Heyosseus\Filum\Board\Boards;
 use Heyosseus\Filum\Contracts\PresenceStore;
 use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
-use Heyosseus\Filum\Conversations\ConversationKey;
 use Heyosseus\Filum\Conversations\Conversations;
 use Heyosseus\Filum\Exceptions\RateLimited;
 use Heyosseus\Filum\Filum;
+use Heyosseus\Filum\Groups\Groups;
 use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
@@ -37,8 +39,14 @@ final class ChatPanel extends Component
     /** Either 'page' or 'overlay'. */
     public string $mode = 'page';
 
-    /** The colleague whose conversation is open, as a string key. */
-    public ?string $selected = null;
+    /**
+     * The open conversation, direct or group.
+     *
+     * A conversation id rather than a user id: a group has no single other
+     * person, and unifying here takes the "who is the partner" special case out
+     * of every path that only needed to know which thread is open.
+     */
+    public ?int $conversation = null;
 
     /** Whether the overlay is expanded. Ignored in page mode. */
     public bool $open = false;
@@ -73,8 +81,15 @@ final class ChatPanel extends Component
     {
         $user = $this->user();
         $thread = $this->thread();
-
         $descriptor = app(Transport::class)->descriptor();
+        $conversation = $this->conversation();
+
+        // Assembled outside the component: what the board shows is a question
+        // about the whole account, not about this one piece of chrome, and both
+        // modes ask it identically.
+        $board = $user instanceof Authenticatable
+            ? app(Boards::class)->for($user, $this->search)
+            : new Board([], [], [], []);
 
         // Recorded on the way out, so a tick always compares against what is
         // genuinely on screen rather than against a guess made somewhere else.
@@ -85,29 +100,65 @@ final class ChatPanel extends Component
         // know 'filum::…' is a real view-string, and the factory takes a plain one.
         return app(Factory::class)->make('filum::livewire.chat-panel', [
             'me' => $user,
-            'colleagues' => $user instanceof Authenticatable ? $this->colleagues($user) : collect(),
+            'board' => $board,
             'thread' => $thread,
             'partner' => $this->partner(),
+            'group' => $conversation instanceof Conversation && $conversation->isGroup() ? $conversation : null,
             'poll' => $descriptor['poll'],
             'driver' => $descriptor['driver'],
-            'conversationId' => $this->conversation()?->id,
+            'conversationId' => $conversation?->id,
             'hasOlder' => $this->hasOlder($thread),
         ]);
     }
 
     /**
-     * Open a conversation with a colleague.
+     * Open the direct conversation with a colleague, creating it on first open.
      */
     public function selectUser(string $id): void
     {
-        $this->selected = $id;
+        $me = $this->user();
+        $users = app(UserProvider::class);
+        $partner = $users->find($id);
+
+        if (! $me instanceof Authenticatable || ! $partner instanceof Authenticatable) {
+            return;
+        }
+
+        $this->open(app(Conversations::class)->between($users->id($me), $users->id($partner)));
+    }
+
+    /**
+     * Open a conversation by id -- how a group is opened, and how the board
+     * addresses anything that is not a person.
+     */
+    public function selectConversation(int $id): void
+    {
+        $me = $this->user();
+        $conversation = Conversation::query()->find($id);
+
+        if (! $me instanceof Authenticatable || ! $conversation instanceof Conversation) {
+            return;
+        }
+
+        // Membership, not merely existence: this is a public Livewire method, so
+        // the id arrives from the browser. A stale id from an old page is turned
+        // away in silence rather than thrown at somebody as an error.
+        if (! $conversation->includes(app(UserProvider::class)->id($me))) {
+            return;
+        }
+
+        $this->open($conversation);
+    }
+
+    private function open(Conversation $conversation): void
+    {
+        $this->conversation = $conversation->id;
         $this->from = null;
         $this->clearComposer();
 
-        $conversation = $this->conversation();
         $me = $this->user();
 
-        if ($conversation instanceof Conversation && $me instanceof Authenticatable) {
+        if ($me instanceof Authenticatable) {
             app(Messages::class)->markRead($conversation, $me);
         }
     }
@@ -120,7 +171,7 @@ final class ChatPanel extends Component
      */
     public function deselect(): void
     {
-        $this->selected = null;
+        $this->conversation = null;
         $this->from = null;
         $this->clearComposer();
     }
@@ -264,44 +315,12 @@ final class ChatPanel extends Component
                 : '',
             (string) app(Messages::class)->unreadTotal($user),
             implode(',', array_map(strval(...), app(PresenceStore::class)->active())),
+            // Without this a quiet tick would skip rendering and a new invitation
+            // would not appear until something else changed -- the skip-render
+            // that protects the composer would swallow the one thing invitations
+            // exist to deliver.
+            (string) app(Groups::class)->invitationsFor($user)->count(),
         ]);
-    }
-
-    /**
-     * The colleagues to list, with presence and unread counts attached.
-     *
-     * @return Collection<int, array{id: string, name: string, avatar: string|null, online: bool, unread: int}>
-     */
-    private function colleagues(Authenticatable $me): Collection
-    {
-        $users = app(UserProvider::class);
-        $active = app(PresenceStore::class)->active();
-        $messages = app(Messages::class);
-
-        $search = mb_strtolower(trim($this->search));
-
-        return $users->chattable($me)
-            ->map(function (Authenticatable $colleague) use ($users, $active, $messages, $me): array {
-                $id = $users->id($colleague);
-
-                // Reading the unread count needs the conversation, but listing a
-                // colleague must never create one -- otherwise merely opening the
-                // sidebar would write a row per person.
-                $key = ConversationKey::for([$users->id($me), $id]);
-                $conversation = Conversation::query()->where('key', $key)->first();
-
-                return [
-                    'id' => (string) $id,
-                    'name' => $users->name($colleague),
-                    'avatar' => $users->avatar($colleague),
-                    'online' => in_array($id, $active, true),
-                    'unread' => $conversation instanceof Conversation
-                        ? $messages->unreadIn($conversation, $me)
-                        : 0,
-                ];
-            })
-            ->filter(fn (array $row): bool => $search === '' || str_contains(mb_strtolower($row['name']), $search))
-            ->values();
     }
 
     /**
@@ -320,26 +339,41 @@ final class ChatPanel extends Component
         return app(Messages::class)->page($conversation, $this->from);
     }
 
+    /**
+     * The other person in a direct conversation. A group has none.
+     *
+     * Read off the participants rather than off a selected user id, because
+     * there is no longer a selected user: the conversation is what is open.
+     */
     private function partner(): ?Authenticatable
     {
-        return $this->selected === null ? null : app(UserProvider::class)->find($this->selected);
-    }
-
-    /**
-     * The conversation with the selected colleague, created on first open.
-     */
-    private function conversation(): ?Conversation
-    {
+        $conversation = $this->conversation();
         $me = $this->user();
-        $partner = $this->partner();
 
-        if (! $me instanceof Authenticatable || ! $partner instanceof Authenticatable) {
+        if (! $conversation instanceof Conversation || $conversation->isGroup() || ! $me instanceof Authenticatable) {
             return null;
         }
 
         $users = app(UserProvider::class);
+        $otherId = $conversation->participants()
+            ->whereNot('user_id', $users->id($me))
+            ->value('user_id');
 
-        return app(Conversations::class)->between($users->id($me), $users->id($partner));
+        return $otherId === null ? null : $users->find((string) $otherId);
+    }
+
+    /**
+     * The open conversation, re-read each call so a deleted group falls away.
+     */
+    private function conversation(): ?Conversation
+    {
+        if ($this->conversation === null) {
+            return null;
+        }
+
+        $conversation = Conversation::query()->find($this->conversation);
+
+        return $conversation instanceof Conversation ? $conversation : null;
     }
 
     private function user(): ?Authenticatable
