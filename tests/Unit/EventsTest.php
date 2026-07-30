@@ -25,7 +25,10 @@ it('carries an id rather than a body, so subscribers re-read through the authori
     $message = new Message(['conversation_id' => 7, 'sender_id' => 3, 'body' => 'secret']);
     $message->id = 42;
 
-    $payload = new MessageSent($message)->broadcastWith();
+    // Parenthesised on purpose: chaining straight off `new` is PHP 8.4 syntax and
+    // Filum supports 8.3, where it is a parse error -- which takes the whole suite
+    // down rather than one test, since the file cannot even be loaded.
+    $payload = (new MessageSent($message))->broadcastWith();
 
     expect($payload)->toBe(['id' => 42, 'conversation_id' => 7])
         ->and($payload)->not->toHaveKey('body');
@@ -42,6 +45,6 @@ it('broadcasts presence on the shared presence channel', function (): void {
 });
 
 it('carries no presence state of its own', function (): void {
-    expect(new PresenceChanged(5, true)->broadcastWith())->toBe(['user_id' => 5, 'online' => true])
-        ->and(new PresenceChanged('abc', false)->broadcastWith())->toBe(['user_id' => 'abc', 'online' => false]);
+    expect((new PresenceChanged(5, true))->broadcastWith())->toBe(['user_id' => 5, 'online' => true])
+        ->and((new PresenceChanged('abc', false))->broadcastWith())->toBe(['user_id' => 'abc', 'online' => false]);
 });
