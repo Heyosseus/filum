@@ -89,9 +89,26 @@ final class FilumServiceProvider extends ServiceProvider
                 __DIR__.'/../config/filum.php' => $this->app->configPath('filum.php'),
             ], 'filum-config');
 
+            // Two registrations over the same directory, and the split is load
+            // bearing rather than tidy. Laravel stamps a published migration with
+            // the moment it was published, so a consumer's copy on disk is named
+            // after that moment and not after the source. vendor:publish then tests
+            // "already published?" against the *source* name, does not find it, and
+            // copies the file again under a fresh stamp -- two create-tables
+            // migrations, and a migrate that aborts on the second before it ever
+            // reaches the new one.
+            //
+            // So: the whole directory for a fresh install, which has nothing on disk
+            // to duplicate, and every schema change after 0.1.1 also under a tag of
+            // its own, which is the only thing an existing install is ever told to
+            // publish.
             $this->publishesMigrations([
                 __DIR__.'/../database/migrations' => $this->app->databasePath('migrations'),
             ], 'filum-migrations');
+
+            $this->publishesMigrations([
+                __DIR__.'/../database/migrations/2026_07_30_000000_add_group_conversations_to_filum_tables.php' => $this->app->databasePath('migrations/2026_07_30_000000_add_group_conversations_to_filum_tables.php'),
+            ], 'filum-migrations-groups');
 
             $this->publishes([
                 __DIR__.'/../lang' => $this->app->langPath('vendor/filum'),

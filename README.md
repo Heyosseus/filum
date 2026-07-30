@@ -46,6 +46,33 @@ public function panel(Panel $panel): Panel
 That's it. You now have a **Chat** page in the navigation and a chat trigger on
 every page. No broadcaster required.
 
+### Upgrading an existing install
+
+Each release that changes the schema publishes its migration under a tag of its
+own. Publish **only** that tag:
+
+```bash
+composer update heyosseus/filum
+php artisan vendor:publish --tag=filum-migrations-groups   # 0.1.x → 0.2.0
+php artisan migrate
+```
+
+Do **not** publish `filum-migrations` on an install that already has Filum's
+tables. That tag covers the whole directory and is for a fresh install. Laravel
+stamps a published migration with the moment it was published, so your copy of
+`create_filum_tables` is named after your original install rather than after
+Filum's source file; `vendor:publish` looks for the source name, does not find it,
+and copies the file a second time under a fresh stamp. `migrate` then runs the
+duplicate first, hits *table already exists*, aborts, and never reaches the new
+migration — so the new code queries columns that were never added, and all chat
+fails, including 1:1. If it has already happened, delete the newer duplicate of
+`*_create_filum_tables.php` before migrating.
+
+Run the migration **in the same release step as the code**, not after it. New code
+on an old schema is a hard outage rather than a degradation: opening a direct
+conversation writes `kind`, `state` and `joined_at`, and every membership check
+reads `state`.
+
 ## Real-time
 
 Filum picks a transport automatically:
@@ -161,6 +188,14 @@ colleagues who are neither invited nor already joined, so growing the group is a
 click from the thread itself. Someone who has left reappears in that list —
 leaving does not blacklist a person, it just returns them to "not yet invited."
 
+The owner additionally sees a rename field and a roster of everyone else in the
+group, each row with a **Remove** button; a row still marked *Pending* has not
+accepted yet, and removing it withdraws the invitation. No row is ever offered
+against the owner themselves — an owner leaves, which hands the group on. All of
+it is plain fields and buttons rather than modals, on purpose: a Filament modal
+inside a Livewire component inside the drawer is the one place Filament 4 and 5
+behave differently.
+
 ```php
 'groups' => [
     'enabled' => env('FILUM_GROUPS', true),
@@ -168,9 +203,11 @@ leaving does not blacklist a person, it just returns them to "not yet invited."
 ```
 
 Disabled means absent, the same as the panel-wide switch below: no groups
-section on the board, no new-group action, existing groups unreachable, and
-every group action refused — not a feature that half-works underneath a
-switched-off UI.
+section on the board, no new-group action, and existing groups genuinely
+unreachable — a member who was joined before the switch cannot open one, read it,
+send into it or leave it while it is off, and every group action is refused. Not a
+feature that half-works underneath a switched-off UI. Nothing is deleted, so
+switching it back on restores what was there.
 
 ## Presence
 

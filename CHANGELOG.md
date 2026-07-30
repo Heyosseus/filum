@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already invited or joined, so populating a group is a click from the thread
   itself rather than a separate screen. Someone who has left becomes invitable
   again from the same list.
+- Rename and a member roster on the group thread header, for the owner: a mistyped
+  group name and a colleague invited by mistake are both fixable from the product.
+  The same control withdraws a pending invitation and removes a joined member, and
+  the roster never offers one against the owner — an owner leaves instead, which
+  passes the group on.
 - Invitations ring Filament's notification bell.
 - `filum.groups.enabled` switches the whole feature off; disabled means absent.
 
@@ -29,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   found. Writes and broadcasts were already gated by membership; reads were not.
   Every read path now goes through the same membership check, so a conversation
   the viewer has not joined renders nothing, the same as if it did not exist.
+
+- `filum.groups.enabled` promised that a disabled install has no reachable groups,
+  and for reads and sends that was not true: a joined member could still open a
+  group by id, read the thread, and send messages that broadcast — while being
+  unable to leave, because leaving was the one action that checked. The switch is
+  now enforced at the same read seam as membership, and in `Messages::send()`, so a
+  group is genuinely absent while it is off. Nothing is deleted; switching it back
+  on restores what was there.
+
+- `Groups::invite()` accepted a user id that resolved to nobody, writing a pending
+  invitation that could never be accepted, never rang, and — with no removal
+  control — could never be withdrawn. It now refuses one before anything is written.
 
 ### Changed
 
@@ -51,12 +68,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ```bash
 composer update heyosseus/filum
-php artisan vendor:publish --tag=filum-migrations
+php artisan vendor:publish --tag=filum-migrations-groups
 php artisan migrate
 ```
 
-Existing direct conversations are unaffected: the new columns default to `direct`
-and `joined`.
+**Publish `filum-migrations-groups`, not `filum-migrations`.** The broad tag is for
+a fresh install only. Laravel stamps a published migration with the moment it was
+published, so the copy of `create_filum_tables` already on your disk is named after
+your 0.1.1 install rather than after Filum's source file. `vendor:publish` looks
+for the source name, does not find it, and copies the file again under a fresh
+stamp — leaving you with two create-tables migrations. `migrate` then runs the
+duplicate first, hits *table already exists*, aborts, and never reaches the group
+migration. Every schema change after 0.1.1 gets a tag of its own for exactly this
+reason.
+
+If you have already done it, delete the newer duplicate of
+`*_create_filum_tables.php` from `database/migrations` before migrating.
+
+**Migrate as part of the deploy, not after it.** Between 0.2.0's code going live
+and `migrate` finishing, chat is down — not degraded, down. `Conversations::between()`
+writes `kind`, `state` and `joined_at`, and `Conversation::includes()` reads
+`state`, so on a schema that lacks those columns every conversation fails,
+including the 1:1 ones that worked a moment earlier. Run the migration in the same
+release step that ships the code.
+
+Existing direct conversations are unaffected once the migration has run: the new
+columns default to `direct` and `joined`.
 
 ## [0.1.1]
 

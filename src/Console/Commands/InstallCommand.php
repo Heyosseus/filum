@@ -19,6 +19,10 @@ final class InstallCommand extends Command
             '--force' => (bool) $this->option('force'),
         ]);
 
+        // The directory tag, which is every migration Filum has -- deliberately not
+        // also the per-release tags, which publish files this one has just copied.
+        // Publishing both would put two of each on disk, and migrate would abort on
+        // the duplicate.
         $this->callSilently('vendor:publish', [
             '--tag' => 'filum-migrations',
             '--force' => (bool) $this->option('force'),
