@@ -14,7 +14,7 @@ use Livewire\Livewire;
 beforeEach(function (): void {
     $this->nino = $this->user('Nino');
     $this->giorgi = $this->user('Giorgi');
-    $this->actingAs($this->nino);
+    $this->actingAs($this->nino, 'panel');
 });
 
 it('lists colleagues but never yourself', function (): void {

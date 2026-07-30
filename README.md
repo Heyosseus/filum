@@ -149,13 +149,30 @@ Filum assumes nothing about your schema:
 
 ```php
 'users' => [
-    'model' => App\Models\User::class,
-    'guard' => 'web',
+    'model' => App\Models\AdminUser::class,
+    'guard' => null,           // null follows the panel's own guard
     'name_column' => 'name',
     'avatar_column' => null,   // e.g. 'avatar_url'
     'provider' => Heyosseus\Filum\Users\ConfiguredUserProvider::class,
 ],
 ```
+
+**`model` is the one thing you must set** if your panel does not authenticate
+`App\Models\User`. Filum queries it to list colleagues and derives the migration's
+foreign key from it, and neither can be guessed — a panel on its own guard has its
+own user model. Set it before you migrate:
+
+```dotenv
+FILUM_USER_MODEL=App\Models\AdminUser
+```
+
+Unquoted, and note it goes in every environment's `.env`, not just your local one.
+Leaving it wrong is not a quiet failure: Filum is asked for the current user while
+the navigation is being built, so an unresolvable model surfaces as an error on
+every page in the panel rather than only on the chat.
+
+`guard` needs no value — Filum follows whichever guard the panel uses. Name one
+only to override that.
 
 Integer, UUID and ULID keys all work — migrations derive the foreign key from the
 model you name. For anything more involved (a name assembled from two columns, an

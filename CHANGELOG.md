@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1]
+
+### Changed
+
+- `filum.users.guard` now defaults to the panel's own guard instead of a hardcoded
+  `web`. A panel authenticating its own model against its own guard needed no
+  configuration to work; with the old default it asked Laravel for the `web`
+  guard's model, and where that model does not exist the error surfaced while the
+  navigation was being built — taking down every page in the panel, not just the
+  chat. Name a guard explicitly to override.
+
 ### Added
 
 - 1:1 chat between admin users, as a Filament page and as a slide-over overlay on

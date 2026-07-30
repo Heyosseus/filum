@@ -7,7 +7,7 @@ use Heyosseus\Filum\Filum;
 use Heyosseus\Filum\Support\Compat;
 
 it('hangs the overlay on every panel page', function (): void {
-    $this->actingAs($this->user('Nino'));
+    $this->actingAs($this->user('Nino'), 'panel');
 
     $rendered = FilamentView::renderHook(Compat::bodyEndHook())->toHtml();
 
@@ -16,7 +16,7 @@ it('hangs the overlay on every panel page', function (): void {
 });
 
 it('renders nothing at all for someone the gate refuses', function (): void {
-    $this->actingAs($this->user('Nino'));
+    $this->actingAs($this->user('Nino'), 'panel');
 
     Filum::auth(static fn (): bool => false);
 
