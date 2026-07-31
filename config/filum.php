@@ -141,6 +141,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Reactions
+    |--------------------------------------------------------------------------
+    |
+    | Emoji reactions on a message, as a toggle: tapping the same emoji twice
+    | takes it back. Anything not in this list is refused, so the set is a real
+    | boundary rather than a suggestion.
+    |
+    | A fixed set rather than a picker on purpose. Filum ships compiled CSS and
+    | no build step, and a picker would mean a JavaScript bundle for something a
+    | back office uses six of. Name your own six here.
+    |
+    */
+
+    'reactions' => [
+        'enabled' => env('FILUM_REACTIONS', true),
+        'emoji' => ['👍', '❤️', '😂', '🎉', '👀', '✅'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Surfaces
     |--------------------------------------------------------------------------
     |

@@ -47,6 +47,18 @@ it('publishes only the group migration under its own tag, still date stamped', f
         ->and($published[0])->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_add_group_conversations_to_filum_tables\.php$/');
 });
 
+it('publishes only the reactions migration under its own tag, still date stamped', function (): void {
+    // The same reasoning as the groups tag: an install that already has the
+    // earlier migrations must be able to take just the new one, because
+    // republishing the rest duplicates them under fresh stamps.
+    $this->artisan('vendor:publish', ['--tag' => 'filum-migrations-reactions'])->assertSuccessful();
+
+    $published = array_map(basename(...), File::glob(database_path('migrations/*.php')));
+
+    expect($published)->toHaveCount(1)
+        ->and($published[0])->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_create_filum_reactions_table\.php$/');
+});
+
 it('can be run again with force', function (): void {
     $this->artisan('filum:install')->assertSuccessful();
     $this->artisan('filum:install', ['--force' => true])->assertSuccessful();
@@ -55,7 +67,9 @@ it('can be run again with force', function (): void {
 afterEach(function (): void {
     File::delete(config_path('filum.php'));
 
-    foreach (File::glob(database_path('migrations/*_filum_tables.php')) as $migration) {
+    // Every Filum migration, not just the two named *_filum_tables: a narrower
+    // glob leaves the newest one behind and it leaks into the next test's count.
+    foreach (File::glob(database_path('migrations/*filum*.php')) as $migration) {
         File::delete($migration);
     }
 });

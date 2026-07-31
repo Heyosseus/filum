@@ -110,6 +110,10 @@ final class FilumServiceProvider extends ServiceProvider
                 __DIR__.'/../database/migrations/2026_07_30_000000_add_group_conversations_to_filum_tables.php' => $this->app->databasePath('migrations/2026_07_30_000000_add_group_conversations_to_filum_tables.php'),
             ], 'filum-migrations-groups');
 
+            $this->publishesMigrations([
+                __DIR__.'/../database/migrations/2026_07_31_000000_create_filum_reactions_table.php' => $this->app->databasePath('migrations/2026_07_31_000000_create_filum_reactions_table.php'),
+            ], 'filum-migrations-reactions');
+
             $this->publishes([
                 __DIR__.'/../lang' => $this->app->langPath('vendor/filum'),
             ], 'filum-translations');

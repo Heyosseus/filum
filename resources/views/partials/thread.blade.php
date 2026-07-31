@@ -109,6 +109,43 @@
                         @endif
 
                         <p class="filum-what">{{ $message->body }}</p>
+
+                        @if ($emoji !== [])
+                            {{--
+                                Existing reactions first, then the opener. The row
+                                is always present so the opener does not shift
+                                position the moment a message gains its first
+                                reaction.
+                            --}}
+                            <div class="filum-reactions">
+                                @foreach ($reactions[$message->id] ?? [] as $reaction)
+                                    <button
+                                        type="button"
+                                        class="filum-reaction @if ($reaction['mine']) filum-reaction-mine @endif"
+                                        wire:click="react({{ $message->id }}, '{{ $reaction['emoji'] }}')"
+                                        wire:key="filum-reaction-{{ $message->id }}-{{ $loop->index }}"
+                                        title="{{ $reaction['mine'] ? __('filum::filum.reactions.remove') : __('filum::filum.reactions.add') }}"
+                                    >
+                                        <span aria-hidden="true">{{ $reaction['emoji'] }}</span>
+                                        <span class="filum-reaction-count">{{ $reaction['count'] }}</span>
+                                    </button>
+                                @endforeach
+
+                                <details class="filum-reaction-pick">
+                                    <summary aria-label="{{ __('filum::filum.reactions.add') }}">+</summary>
+
+                                    <div class="filum-reaction-set">
+                                        @foreach ($emoji as $option)
+                                            <button
+                                                type="button"
+                                                wire:click="react({{ $message->id }}, '{{ $option }}')"
+                                                wire:key="filum-pick-{{ $message->id }}-{{ $loop->index }}"
+                                            >{{ $option }}</button>
+                                        @endforeach
+                                    </div>
+                                </details>
+                            </div>
+                        @endif
                     </div>
                 </li>
 

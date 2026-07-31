@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0]
+
+### Added
+
+- Emoji reactions on a message, as a toggle: tapping the same emoji twice takes
+  it back, so there is no separate remove control to find. Several people can add
+  the same emoji and one person can add several different ones.
+- `filum.reactions.emoji` names the set an application offers, and anything
+  outside it is refused rather than stored. A fixed set rather than a picker is
+  deliberate: Filum ships compiled CSS and no build step, and a picker would mean
+  a JavaScript bundle for something a back office uses six of.
+- `filum.reactions.enabled` switches the feature off; disabled means absent, and
+  with no emoji in the set every reaction is refused by the same guard that
+  rejects a typo.
+
+### Upgrading
+
+```bash
+composer update heyosseus/filum
+php artisan vendor:publish --tag=filum-migrations-reactions
+php artisan migrate
+```
+
+Publish **only** that tag. Publishing `filum-migrations` on an existing install
+copies the earlier migrations a second time under fresh timestamps -- Laravel
+looks for the source name and your install has the stamped one -- and `migrate`
+then aborts on the duplicate. Run the tag once; do not put `vendor:publish` in a
+repeatedly-executed deploy step.
+
 ## [0.2.0]
 
 ### Added

@@ -16,12 +16,15 @@ use Heyosseus\Filum\Exceptions\NotAParticipant;
 use Heyosseus\Filum\Exceptions\NotInvited;
 use Heyosseus\Filum\Exceptions\NotTheOwner;
 use Heyosseus\Filum\Exceptions\RateLimited;
+use Heyosseus\Filum\Exceptions\UnknownEmoji;
 use Heyosseus\Filum\Filum;
 use Heyosseus\Filum\Groups\Groups;
 use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
+use Heyosseus\Filum\Models\Reaction;
 use Heyosseus\Filum\Presence\Heartbeat;
+use Heyosseus\Filum\Reactions\Reactions;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
@@ -142,6 +145,8 @@ final class ChatPanel extends Component
             'poll' => $descriptor['poll'],
             'driver' => $descriptor['driver'],
             'conversationId' => $conversation?->id,
+            'reactions' => $this->reactionsFor($user, $thread),
+            'emoji' => app(Reactions::class)->emoji(),
             'hasOlder' => $this->hasOlder($thread),
         ]);
     }
@@ -630,7 +635,74 @@ final class ChatPanel extends Component
             // that protects the composer would swallow the one thing invitations
             // exist to deliver.
             (string) app(Groups::class)->invitationsFor($user)->count(),
+            // Reactions change nothing else on this list -- no new message, no
+            // unread, no presence -- so without their own term a colleague's
+            // reaction would sit invisible until something unrelated moved.
+            $this->reactionMark($conversation),
         ]);
+    }
+
+    /**
+     * The thread's reactions, keyed by message id.
+     *
+     * Nobody signed in means nothing to mark as yours, so there is nothing worth
+     * the query.
+     *
+     * @param  Collection<int, Message>  $thread
+     * @return array<int, list<array{emoji: string, count: int, mine: bool}>>
+     */
+    private function reactionsFor(?Authenticatable $user, Collection $thread): array
+    {
+        if (! $user instanceof Authenticatable) {
+            return [];
+        }
+
+        return app(Reactions::class)->forThread($thread, $user);
+    }
+
+    /**
+     * A cheap stand-in for "have the reactions in this thread changed".
+     *
+     * The newest reaction id plus how many there are: an addition moves the id,
+     * and a removal moves the count, so the pair catches both without reading
+     * the rows themselves.
+     */
+    private function reactionMark(?Conversation $conversation): string
+    {
+        if (! $conversation instanceof Conversation) {
+            return '';
+        }
+
+        $rows = Reaction::query()->whereIn(
+            'message_id',
+            Message::query()->where('conversation_id', $conversation->id)->select('id'),
+        );
+
+        return $rows->max('id').':'.$rows->count();
+    }
+
+    /**
+     * Add or take back an emoji reaction.
+     *
+     * Both failures are swallowed rather than shown: the message id and the
+     * emoji arrive from the browser, so a stale id or an emoji the application
+     * has since removed from its set is a page that has gone out of date, not
+     * something to tell the person off about.
+     */
+    public function react(int $messageId, string $emoji): void
+    {
+        $me = $this->user();
+        $message = Message::query()->find($messageId);
+
+        if (! $me instanceof Authenticatable || ! $message instanceof Message) {
+            return;
+        }
+
+        try {
+            app(Reactions::class)->toggle($message, $me, $emoji);
+        } catch (NotAParticipant|UnknownEmoji) {
+            //
+        }
     }
 
     /**

@@ -67,6 +67,11 @@ return [
         'invited_body' => 'Invited you to :group',
     ],
 
+    'reactions' => [
+        'add' => 'React',
+        'remove' => 'Remove your reaction',
+    ],
+
     'overlay' => [
         'open' => 'Open chat',
         'close' => 'Close chat',
