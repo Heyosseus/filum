@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1]
+
+### Fixed
+
+- The reaction opener was a `<details>` element whose disclosure triangle painted
+  anyway: `display: grid` on a `summary` stops it being a list item, so
+  `list-style: none` no longer applies. It rendered as a stray arrow beside the
+  opener on every message.
+- An opener sat under every message permanently. In a long thread that is one
+  piece of chrome per line competing with the record, which is the opposite of
+  what a scannable log wants. Reactions somebody left are content and still
+  always show; the control for leaving one is now revealed on hover, on keyboard
+  focus, and persistently on touch devices, where there is no hover to reveal it.
+
+### Changed
+
+- The emoji set opens inline in the reaction row rather than as a popover. A
+  popover inside a scrolling thread needs clipping and stacking handled, and it
+  covers the very messages being reacted to.
+- Reaction counts now use the same tabular monospace face as the time gutter, and
+  your own reaction uses the accent your own messages already use.
+- The `<details>` markup is gone, replaced by Alpine, which Filament already
+  loads. No new dependency and no build step.
+
+**Note for anyone styling Filum:** the CSS class `filum-reaction-pick` is now
+`filum-reaction-add`, and the surrounding markup changed. If you published the
+views with `--tag=filum-views` you keep your own copy and will not pick this up;
+re-publish with `--force` or port the change by hand.
+
 ## [0.3.0]
 
 ### Added
