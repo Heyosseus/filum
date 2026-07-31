@@ -693,100 +693,167 @@
 /* Reactions ---------------------------------------------------------------- */
 
 /*
- * A row that is always present once reactions are switched on, so the opener
- * does not jump position the moment a message gains its first chip.
+ * Two things live in this row and they are not the same kind of thing. A
+ * reaction somebody left is part of the record, so it is always visible. The
+ * control for leaving one is chrome, and in a log this dense chrome has to earn
+ * its place -- so it is revealed on hover, the way Slack and Discord reveal
+ * theirs, rather than sitting under all fifty messages at once.
  */
+
+.filum-root [x-cloak] {
+    display: none !important;
+}
+
 .filum-reactions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem;
-    margin-top: 0.3125rem;
+    /* No margin until something is actually said, so an empty row costs nothing. */
+    min-height: 1.5rem;
+}
+
+.filum-reactions-said {
+    margin-top: 0.375rem;
 }
 
 .filum-reaction {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.0625rem 0.375rem;
-    background: transparent;
-    border: 1px solid var(--filum-hairline);
+    gap: 0.3125rem;
+    height: 1.5rem;
+    padding: 0 0.5rem 0 0.4375rem;
+    background: color-mix(in oklab, var(--filum-text) 6%, transparent);
+    border: 1px solid transparent;
     border-radius: 9999px;
-    color: inherit;
+    color: var(--filum-whisper);
     cursor: pointer;
     font: inherit;
-    font-size: 0.75rem;
-    line-height: 1.25rem;
+    line-height: 1;
+    transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .filum-reaction:hover {
-    background: color-mix(in oklab, var(--filum-text) 6%, transparent);
+    background: color-mix(in oklab, var(--filum-text) 11%, transparent);
 }
 
-/* Yours is stated by the accent, the same signal own messages already use. */
+/*
+ * Yours is stated with the same accent own messages already use, so the ledger
+ * has one meaning for that colour rather than two.
+ */
 .filum-reaction-mine {
-    background: color-mix(in oklab, var(--filum-signal) 12%, transparent);
-    border-color: color-mix(in oklab, var(--filum-signal) 35%, transparent);
+    background: color-mix(in oklab, var(--filum-signal) 14%, transparent);
+    border-color: color-mix(in oklab, var(--filum-signal) 38%, transparent);
+    color: var(--filum-signal);
 }
 
+.filum-reaction-mine:hover {
+    background: color-mix(in oklab, var(--filum-signal) 20%, transparent);
+}
+
+/* Emoji render at their own optical size; the surrounding type stays 0.875rem. */
+.filum-reaction-emoji {
+    font-size: 0.8125rem;
+    line-height: 1;
+}
+
+/* Counts share the tabular face the time gutter uses -- numbers read as numbers. */
 .filum-reaction-count {
     font-family: var(--filum-mono);
     font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
+    font-weight: 600;
 }
 
-.filum-reaction-pick {
-    position: relative;
-    display: inline-block;
-}
+/* The opener ---------------------------------------------------------------- */
 
-.filum-reaction-pick summary {
+.filum-reaction-add {
     display: grid;
     place-items: center;
-    width: 1.375rem;
-    height: 1.375rem;
-    border: 1px solid var(--filum-hairline);
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    background: transparent;
+    border: 0;
     border-radius: 9999px;
     color: var(--filum-whisper);
     cursor: pointer;
-    font-size: 0.8125rem;
-    line-height: 1;
-    list-style: none;
-    user-select: none;
+    /* Transparent rather than hidden: the row keeps its height, so revealing the
+       control moves nothing under the pointer. */
+    opacity: 0;
+    transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
 }
 
-.filum-reaction-pick summary::-webkit-details-marker { display: none; }
+.filum-reaction-add svg {
+    width: 1rem;
+    height: 1rem;
+}
 
-.filum-reaction-pick summary:hover {
-    background: color-mix(in oklab, var(--filum-text) 6%, transparent);
+.filum-row:hover .filum-reaction-add,
+.filum-reactions:focus-within .filum-reaction-add,
+.filum-reaction-add[aria-expanded='true'] {
+    opacity: 1;
+}
+
+.filum-reaction-add:hover,
+.filum-reaction-add[aria-expanded='true'] {
+    background: color-mix(in oklab, var(--filum-text) 10%, transparent);
     color: var(--filum-text);
 }
 
-/* Floated rather than inline: opening the set must not reflow the ledger. */
+/* Touch has no hover, so there it stays put rather than being unreachable. */
+@media (hover: none) {
+    .filum-reaction-add {
+        opacity: 1;
+    }
+}
+
+/* The set ------------------------------------------------------------------- */
+
+/*
+ * Inline in the row rather than floating above the thread. A popover inside a
+ * scrolling log needs clipping and stacking handled, and would cover the very
+ * messages being reacted to -- which is the one thing a ledger must not do to
+ * itself.
+ */
 .filum-reaction-set {
-    position: absolute;
-    z-index: 2;
-    inset-block-start: calc(100% + 0.25rem);
-    inset-inline-start: 0;
-    display: flex;
-    gap: 0.125rem;
-    padding: 0.25rem;
-    background: var(--filum-recess);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.0625rem;
+    padding: 0.125rem;
+    background: var(--filum-ink);
     border: 1px solid var(--filum-hairline);
-    border-radius: var(--filum-radius-sm);
-    box-shadow: 0 6px 20px color-mix(in oklab, var(--gray-950, #030712) 18%, transparent);
+    border-radius: 9999px;
 }
 
 .filum-reaction-set button {
-    padding: 0.125rem 0.25rem;
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
     background: transparent;
     border: 0;
-    border-radius: var(--filum-radius-sm);
+    border-radius: 9999px;
     cursor: pointer;
-    font-size: 1rem;
-    line-height: 1.4;
+    font-size: 0.875rem;
+    line-height: 1;
+    transition: background-color 120ms ease, transform 120ms ease;
 }
 
 .filum-reaction-set button:hover {
-    background: color-mix(in oklab, var(--filum-text) 8%, transparent);
+    background: color-mix(in oklab, var(--filum-text) 12%, transparent);
+    transform: scale(1.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .filum-reaction,
+    .filum-reaction-add,
+    .filum-reaction-set button {
+        transition: none;
+    }
+
+    .filum-reaction-set button:hover {
+        transform: none;
+    }
 }
