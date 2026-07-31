@@ -85,6 +85,8 @@
                     @else
                         @include('filum::partials.thread', [
                             'thread' => $thread,
+                            'reactions' => $reactions,
+                            'emoji' => $emoji,
                             'me' => $me,
                             'partner' => $partner,
                             'partnerOnline' => $partnerOnline,

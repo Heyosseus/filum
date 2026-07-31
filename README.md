@@ -214,6 +214,30 @@ send into it or leave it while it is off, and every group action is refused. Not
 feature that half-works underneath a switched-off UI. Nothing is deleted, so
 switching it back on restores what was there.
 
+## Reactions
+
+Any message can carry emoji reactions. They are a toggle — tapping the same emoji
+twice takes it back, so there is no separate remove control to find. Several
+people can add the same emoji, and one person can add several different ones.
+
+```php
+'reactions' => [
+    'enabled' => env('FILUM_REACTIONS', true),
+    'emoji' => ['👍', '❤️', '😂', '🎉', '👀', '✅'],
+],
+```
+
+The set is configuration rather than a picker, and anything outside it is refused
+rather than stored. Filum ships compiled CSS and runs no build step, so a full
+picker would mean a JavaScript bundle for something a back office uses six of —
+name your own six instead. Reactions are ordered by that list rather than by
+count, so a row of chips never reshuffles under the cursor.
+
+**Reactions never ring the notification bell.** A thumbs-up is an
+acknowledgement, not a message, and an entry for each one would bury the entries
+that matter. They appear for everyone looking at the thread on the next tick,
+with or without a broadcaster.
+
 ## Presence
 
 The sidebar shows who is around. A heartbeat writes `last_seen_at` on an
