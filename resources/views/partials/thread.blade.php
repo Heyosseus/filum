@@ -111,14 +111,27 @@
                         <p class="filum-what">{{ $message->body }}</p>
 
                         @if ($emoji !== [])
+                            @php($said = $reactions[$message->id] ?? [])
+
                             {{--
-                                Existing reactions first, then the opener. The row
-                                is always present so the opener does not shift
-                                position the moment a message gains its first
-                                reaction.
+                                Reactions someone left are content and always show.
+                                The way to leave one is chrome, and chrome in a log
+                                this dense has to earn its place -- so the opener is
+                                revealed on hover rather than resident, the way
+                                Slack and Discord reveal theirs. Fifty messages with
+                                a permanent button each is fifty things competing
+                                with the record.
+
+                                It fades rather than appears: the row keeps its
+                                height either way, so nothing under the pointer
+                                shifts as it comes in.
                             --}}
-                            <div class="filum-reactions">
-                                @foreach ($reactions[$message->id] ?? [] as $reaction)
+                            <div
+                                class="filum-reactions @if ($said !== []) filum-reactions-said @endif"
+                                x-data="{ picking: false }"
+                                x-on:keydown.escape="picking = false"
+                            >
+                                @foreach ($said as $reaction)
                                     <button
                                         type="button"
                                         class="filum-reaction @if ($reaction['mine']) filum-reaction-mine @endif"
@@ -126,24 +139,51 @@
                                         wire:key="filum-reaction-{{ $message->id }}-{{ $loop->index }}"
                                         title="{{ $reaction['mine'] ? __('filum::filum.reactions.remove') : __('filum::filum.reactions.add') }}"
                                     >
-                                        <span aria-hidden="true">{{ $reaction['emoji'] }}</span>
+                                        <span class="filum-reaction-emoji" aria-hidden="true">{{ $reaction['emoji'] }}</span>
                                         <span class="filum-reaction-count">{{ $reaction['count'] }}</span>
                                     </button>
                                 @endforeach
 
-                                <details class="filum-reaction-pick">
-                                    <summary aria-label="{{ __('filum::filum.reactions.add') }}">+</summary>
+                                <button
+                                    type="button"
+                                    class="filum-reaction-add"
+                                    x-on:click="picking = ! picking"
+                                    x-bind:aria-expanded="picking ? 'true' : 'false'"
+                                    aria-label="{{ __('filum::filum.reactions.add') }}"
+                                    title="{{ __('filum::filum.reactions.add') }}"
+                                >
+                                    {{-- Drawn rather than an icon font: the package ships one stylesheet and no build step. --}}
+                                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                        <circle cx="10" cy="10" r="7.25" />
+                                        <path d="M7.25 11.75a3.4 3.4 0 0 0 5.5 0" stroke-linecap="round" />
+                                        <path d="M7.5 8.25h.01M12.5 8.25h.01" stroke-linecap="round" stroke-width="2" />
+                                    </svg>
+                                </button>
 
-                                    <div class="filum-reaction-set">
-                                        @foreach ($emoji as $option)
-                                            <button
-                                                type="button"
-                                                wire:click="react({{ $message->id }}, '{{ $option }}')"
-                                                wire:key="filum-pick-{{ $message->id }}-{{ $loop->index }}"
-                                            >{{ $option }}</button>
-                                        @endforeach
-                                    </div>
-                                </details>
+                                {{--
+                                    The set opens inline, in the margin row, rather
+                                    than floating over the thread. A popover would
+                                    need clipping and z-index handling inside a
+                                    scrolling log, and would cover the very messages
+                                    you are reacting to -- the one thing a ledger
+                                    should never do to itself.
+                                --}}
+                                <span
+                                    class="filum-reaction-set"
+                                    x-show="picking"
+                                    x-cloak
+                                    x-on:click.outside="picking = false"
+                                >
+                                    @foreach ($emoji as $option)
+                                        <button
+                                            type="button"
+                                            wire:click="react({{ $message->id }}, '{{ $option }}')"
+                                            wire:key="filum-pick-{{ $message->id }}-{{ $loop->index }}"
+                                            x-on:click="picking = false"
+                                            title="{{ $option }}"
+                                        >{{ $option }}</button>
+                                    @endforeach
+                                </span>
                             </div>
                         @endif
                     </div>

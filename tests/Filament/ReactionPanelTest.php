@@ -52,14 +52,24 @@ it('shows a colleague reaction without marking it as yours', function (): void {
 it('offers the picker only while reactions are switched on', function (): void {
     Livewire::test(ChatPanel::class)
         ->call('selectConversation', $this->conversation->id)
-        ->assertSeeHtml('filum-reaction-pick');
+        ->assertSeeHtml('filum-reaction-add');
 
     config()->set('filum.reactions.enabled', false);
 
     Livewire::test(ChatPanel::class)
         ->call('selectConversation', $this->conversation->id)
-        ->assertDontSeeHtml('filum-reaction-pick')
+        ->assertDontSeeHtml('filum-reaction-add')
         ->assertDontSeeHtml('filum-reactions');
+});
+
+it('gives the row no margin until something has actually been said', function (): void {
+    // An untouched message must cost nothing above it; the spacing arrives with
+    // the first chip, not with the opener that is invisible anyway.
+    Livewire::test(ChatPanel::class)
+        ->call('selectConversation', $this->conversation->id)
+        ->assertDontSeeHtml('filum-reactions-said')
+        ->call('react', $this->message->id, '👍')
+        ->assertSeeHtml('filum-reactions-said');
 });
 
 it('ignores a reaction on a message that is not there', function (): void {
