@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Added
+
+- Replies. Any message can answer another, and the answer carries a one-line
+  quote of what it answers. A reply may only point at something in the same
+  conversation -- the id comes from the browser, and quoting across would carry a
+  message's text into a thread not allowed to see it. Deleting the parent leaves
+  the answer standing and drops only its quote.
+- File attachments. A message can carry files, or be nothing but files -- typing
+  "here" above every document is not a requirement. Images show as thumbnails,
+  everything else as a named chip with its size.
+- `filum.attachments` configures the disk, the size ceiling, how many files a
+  message may carry, and the accepted types. The type is read from the file's own
+  bytes rather than from what the browser claimed, so renaming a script to `.png`
+  does not get it past the allowlist.
+
+### Fixed
+
+- Opening a conversation left the thread scrolled to the top, so the newest
+  message was off screen until you scrolled down. A thread now opens at its foot
+  and follows new messages -- but only while you are already at the bottom, so
+  reading yesterday is never interrupted by a colleague typing today.
+
+### Security
+
+- Attachments are stored on a **private** disk and served through a panel route
+  that checks conversation membership on every request, never linked to directly.
+  A public URL would make every document somebody sends readable by anyone who
+  guessed the path. The route answers 404 rather than 403 throughout, because
+  whether a given file exists is itself something only a participant should learn.
+  Keep `filum.attachments.disk` pointed at a private disk.
+
+### Upgrading
+
+```bash
+composer update heyosseus/filum
+php artisan vendor:publish --tag=filum-migrations-replies
+php artisan migrate
+```
+
+Publish **only** that tag. Publishing `filum-migrations` on an existing install
+copies the earlier migrations a second time under fresh timestamps and `migrate`
+then aborts on the duplicate.
+
 ## [0.3.1]
 
 ### Fixed

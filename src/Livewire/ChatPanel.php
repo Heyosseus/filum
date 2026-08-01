@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Heyosseus\Filum\Livewire;
 
+use Heyosseus\Filum\Attachments\Attachments;
 use Heyosseus\Filum\Board\Board;
 use Heyosseus\Filum\Board\Boards;
 use Heyosseus\Filum\Contracts\PresenceStore;
@@ -11,6 +12,7 @@ use Heyosseus\Filum\Contracts\Transport;
 use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Conversations\Conversations;
 use Heyosseus\Filum\Exceptions\AlreadyInvited;
+use Heyosseus\Filum\Exceptions\AttachmentRefused;
 use Heyosseus\Filum\Exceptions\NotAGroup;
 use Heyosseus\Filum\Exceptions\NotAParticipant;
 use Heyosseus\Filum\Exceptions\NotInvited;
@@ -28,9 +30,11 @@ use Heyosseus\Filum\Reactions\Reactions;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 /**
  * The chat itself, in one component.
@@ -44,6 +48,8 @@ use Livewire\Component;
  */
 final class ChatPanel extends Component
 {
+    use WithFileUploads;
+
     /** Either 'page' or 'overlay'. */
     public string $mode = 'page';
 
@@ -58,6 +64,16 @@ final class ChatPanel extends Component
 
     /** Whether the overlay is expanded. Ignored in page mode. */
     public bool $open = false;
+
+    /** The message being answered, if any. */
+    public ?int $replyTo = null;
+
+    /**
+     * Files picked but not yet sent.
+     *
+     * @var array<int, mixed>
+     */
+    public array $files = [];
 
     public string $body = '';
 
@@ -147,6 +163,8 @@ final class ChatPanel extends Component
             'conversationId' => $conversation?->id,
             'reactions' => $this->reactionsFor($user, $thread),
             'emoji' => app(Reactions::class)->emoji(),
+            'replying' => $this->replyingTo(),
+            'attaching' => app(Attachments::class)->enabled(),
             'hasOlder' => $this->hasOlder($thread),
         ]);
     }
@@ -513,13 +531,28 @@ final class ChatPanel extends Component
         }
 
         try {
-            app(Messages::class)->send($conversation, $me, $this->body);
+            $files = array_values(array_filter(
+                $this->files,
+                static fn (mixed $file): bool => $file instanceof UploadedFile,
+            ));
+
+            app(Messages::class)->send(
+                $conversation,
+                $me,
+                $this->body,
+                $this->replyTo,
+                app(Attachments::class)->accept($conversation, $files),
+            );
         } catch (RateLimited $e) {
             $this->addError('body', __('filum::filum.composer.rate_limited', ['seconds' => $e->retryAfter]));
 
             return;
         } catch (InvalidArgumentException) {
             $this->addError('body', __('filum::filum.composer.empty'));
+
+            return;
+        } catch (AttachmentRefused $e) {
+            $this->addError('files', $e->getMessage());
 
             return;
         }
@@ -537,6 +570,8 @@ final class ChatPanel extends Component
     private function clearComposer(): void
     {
         $this->body = '';
+        $this->replyTo = null;
+        $this->files = [];
         $this->resetErrorBag();
         $this->dispatch('filum-composer-cleared');
     }
@@ -643,6 +678,26 @@ final class ChatPanel extends Component
     }
 
     /**
+     * The message the composer is currently answering, if it still exists.
+     *
+     * Re-read rather than trusted: the reply id is public state, and the message
+     * it points at can be deleted between picking it and sending.
+     */
+    private function replyingTo(): ?Message
+    {
+        $conversation = $this->conversation();
+
+        if ($this->replyTo === null || ! $conversation instanceof Conversation) {
+            return null;
+        }
+
+        return Message::query()
+            ->where('id', $this->replyTo)
+            ->where('conversation_id', $conversation->id)
+            ->first();
+    }
+
+    /**
      * The thread's reactions, keyed by message id.
      *
      * Nobody signed in means nothing to mark as yours, so there is nothing worth
@@ -679,6 +734,46 @@ final class ChatPanel extends Component
         );
 
         return $rows->max('id').':'.$rows->count();
+    }
+
+    /**
+     * Answer a particular message.
+     *
+     * Only something in the open conversation can be answered -- the id comes
+     * from the browser, and quoting a message from elsewhere would carry its text
+     * into a thread that is not allowed to see it.
+     */
+    public function reply(int $messageId): void
+    {
+        $conversation = $this->conversation();
+
+        if (! $conversation instanceof Conversation) {
+            return;
+        }
+
+        $exists = Message::query()
+            ->where('id', $messageId)
+            ->where('conversation_id', $conversation->id)
+            ->exists();
+
+        if ($exists) {
+            $this->replyTo = $messageId;
+        }
+    }
+
+    public function cancelReply(): void
+    {
+        $this->replyTo = null;
+    }
+
+    /**
+     * Drop one of the files picked but not yet sent.
+     */
+    public function unpick(int $index): void
+    {
+        unset($this->files[$index]);
+
+        $this->files = array_values($this->files);
     }
 
     /**

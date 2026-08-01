@@ -161,6 +161,41 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Attachments
+    |--------------------------------------------------------------------------
+    |
+    | Files carried by a message. Stored on a private disk and served back
+    | through the panel, never linked to directly -- a public URL would make
+    | every document somebody sends readable by anyone who guessed the path.
+    |
+    | Keep the disk private. "local" is, "public" is not; pointing this at a
+    | public disk hands out your paperwork.
+    |
+    | The type is read from the file's own bytes rather than from what the browser
+    | claimed, so renaming a script to .png does not get it past the allowlist.
+    |
+    */
+
+    'attachments' => [
+        'enabled' => env('FILUM_ATTACHMENTS', true),
+        'disk' => env('FILUM_ATTACHMENTS_DISK', 'local'),
+        'max_size' => 10240,
+        'max_per_message' => 4,
+        'mimes' => [
+            'image/png',
+            'image/jpeg',
+            'image/gif',
+            'image/webp',
+            'application/pdf',
+            'text/plain',
+            'text/csv',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Surfaces
     |--------------------------------------------------------------------------
     |

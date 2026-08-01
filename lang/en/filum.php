@@ -48,6 +48,9 @@ return [
         'none_selected' => 'Choose a colleague to start talking.',
         'empty' => 'No messages yet. Say something.',
         'load_older' => 'Load earlier messages',
+        'reply' => 'Reply',
+        'reply_cancel' => 'Cancel reply',
+        'replying_to' => 'Replying to',
         'you' => 'You',
         'sent_at' => 'Sent :time',
         'today' => 'Today',
@@ -56,6 +59,9 @@ return [
 
     'composer' => [
         'placeholder' => 'Write a message…',
+        'attach' => 'Attach a file',
+        'attachment' => 'a file',
+        'remove_file' => 'Remove this file',
         'send' => 'Send',
         'too_long' => 'That message is longer than :max characters.',
         'rate_limited' => 'Too many messages. Try again in :seconds seconds.',

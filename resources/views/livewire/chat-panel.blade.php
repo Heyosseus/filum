@@ -97,7 +97,11 @@
                             'hasOlder' => $hasOlder,
                         ])
 
-                        @include('filum::partials.composer')
+                        @include('filum::partials.composer', [
+                            'replying' => $replying,
+                            'attaching' => $attaching,
+                            'files' => $files,
+                        ])
                     @endif
                 </section>
             @endif
