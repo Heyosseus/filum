@@ -8,6 +8,7 @@ use Heyosseus\Filum\Filum;
 use Heyosseus\Filum\FilumServiceProvider;
 use Heyosseus\Filum\Tests\Fixtures\User;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Orchestra\Testbench\TestCase as Orchestra;
@@ -22,6 +23,13 @@ abstract class TestCase extends Orchestra
 
         // The gate is static, so one test's callback must not leak into the next.
         Filum::flush();
+
+        // Applications that take performance seriously turn this on, and a
+        // package that lazy loads inside their views does not merely run slowly
+        // there -- it throws. Filum found that out from a consumer rather than
+        // from its own suite once; enabling it here is how it does not happen
+        // twice.
+        Model::preventLazyLoading();
     }
 
     #[Override]

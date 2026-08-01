@@ -47,12 +47,11 @@ final readonly class Messages
      * outage costs a delay, not a message -- and the announcement is allowed to
      * fail quietly because the reconciliation poll will find what it missed.
      *
+     * @param  list<array{disk: string, path: string, name: string, mime: string, size: int}>  $attachments
+     *
      * @throws NotAParticipant when the sender is not in the conversation.
      * @throws NotAGroup when the conversation is a group and groups are switched off.
      * @throws RateLimited when the sender is sending too fast.
-     */
-    /**
-     * @param  list<array{disk: string, path: string, name: string, mime: string, size: int}>  $attachments
      */
     public function send(
         Conversation $conversation,
@@ -217,7 +216,14 @@ final readonly class Messages
      */
     public function page(Conversation $conversation, ?int $from = null): Collection
     {
+        // Eager loaded because the ledger reads both for every line it draws.
+        // Left lazy this is one query per message for the quote and another for
+        // its files -- and in an application running preventLazyLoading, which is
+        // the posture of a careful one, it is not a slow thread but a thrown
+        // exception. Filum learned that from a consumer rather than from its own
+        // suite; tests/TestCase.php now forbids lazy loading so it cannot recur.
         $query = Message::query()
+            ->with(['replyTo', 'attachments'])
             ->where('conversation_id', $conversation->id)
             ->orderByDesc('id');
 
@@ -278,6 +284,7 @@ final readonly class Messages
     {
         /** @var Collection<int, Message> $messages */
         $messages = Message::query()
+            ->with(['replyTo', 'attachments'])
             ->where('conversation_id', $conversation->id)
             ->where('id', '>', $after)
             ->orderBy('id')
