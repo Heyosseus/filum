@@ -13,8 +13,17 @@
     thread stays one query each rather than one per line.
 --}}
 @php
+    use Illuminate\Support\Str;
+
     $users = app(\Heyosseus\Filum\Contracts\UserProvider::class);
     $partnerName = $partner === null ? '' : $users->name($partner);
+
+    // Resolved once per render rather than per file: the route belongs to the
+    // panel serving the request, so the name has to be built from its id.
+    $panelId = \Filament\Facades\Filament::getCurrentPanel()?->getId();
+    $attachmentUrl = static fn (\Heyosseus\Filum\Models\Attachment $file): string => $panelId === null
+        ? '#'
+        : route("filament.{$panelId}.filum.attachment", ['attachment' => $file->id]);
     $names = [];
 
     if ($group !== null) {
@@ -51,7 +60,27 @@
     </header>
 @endif
 
-<div class="filum-thread filum-scroll">
+{{--
+    A log opens at its newest line, the way you would pick up a paper one -- and
+    a message arriving while you are looking should follow.
+
+    But only while you are already at the bottom. Somebody who has scrolled up to
+    read yesterday must not be yanked back down because a colleague typed, so the
+    stick flag tracks how close to the foot the reader is and every automatic
+    scroll asks it first. Reaching back for earlier messages leaves the flag
+    false, which is exactly what keeps loadOlder from throwing you forward again.
+--}}
+<div
+    class="filum-thread filum-scroll"
+    wire:key="filum-thread-{{ $conversationId }}"
+    x-data="{
+        stick: true,
+        foot() { this.$el.scrollTop = this.$el.scrollHeight },
+        near() { return this.$el.scrollHeight - this.$el.scrollTop - this.$el.clientHeight < 48 },
+    }"
+    x-init="$nextTick(() => foot())"
+    x-on:scroll.passive="stick = near()"
+>
     @if ($thread->isEmpty())
         <p class="filum-empty">{{ __('filum::filum.conversation.empty') }}</p>
     @else
@@ -108,7 +137,51 @@
                             </span>
                         @endif
 
-                        <p class="filum-what">{{ $message->body }}</p>
+                        @if ($message->replyTo !== null)
+                            {{--
+                                A quote, not a link. Jumping the log to the parent
+                                would move the reader away from the line they were
+                                on; showing the gist keeps the answer readable
+                                where it is.
+                            --}}
+                            <div class="filum-quote">
+                                <span class="filum-quote-who">
+                                    {{ (string) $message->replyTo->sender_id === (string) $me->getAuthIdentifier()
+                                        ? __('filum::filum.conversation.you')
+                                        : ($group === null ? $partnerName : ($names[(string) $message->replyTo->sender_id] ?? '')) }}
+                                </span>
+                                <span class="filum-quote-what">{{ Str::limit($message->replyTo->body, 70) }}</span>
+                            </div>
+                        @endif
+
+                        @if ($message->body !== '')
+                            <p class="filum-what">{{ $message->body }}</p>
+                        @endif
+
+                        @if ($message->attachments->isNotEmpty())
+                            <div class="filum-files">
+                                @foreach ($message->attachments as $file)
+                                    <a
+                                        class="filum-file @if ($file->isImage()) filum-file-image @endif"
+                                        href="{{ $attachmentUrl($file) }}"
+                                        target="_blank"
+                                        rel="noopener"
+                                        wire:key="filum-file-{{ $file->id }}"
+                                    >
+                                        @if ($file->isImage())
+                                            <img src="{{ $attachmentUrl($file) }}" alt="{{ $file->name }}" loading="lazy">
+                                        @else
+                                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                                <path d="M11.5 2.5H6a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 6 17.5h8a1.5 1.5 0 0 0 1.5-1.5V6.5Z" stroke-linejoin="round" />
+                                                <path d="M11.5 2.5v4h4" stroke-linejoin="round" />
+                                            </svg>
+                                            <span class="filum-file-name">{{ $file->name }}</span>
+                                            <span class="filum-file-size">{{ $file->readableSize() }}</span>
+                                        @endif
+                                    </a>
+                                @endforeach
+                            </div>
+                        @endif
 
                         @if ($emoji !== [])
                             @php($said = $reactions[$message->id] ?? [])
@@ -143,6 +216,20 @@
                                         <span class="filum-reaction-count">{{ $reaction['count'] }}</span>
                                     </button>
                                 @endforeach
+
+                                {{-- Revealed with the reaction opener, and for the same reason. --}}
+                                <button
+                                    type="button"
+                                    class="filum-reaction-add"
+                                    wire:click="reply({{ $message->id }})"
+                                    aria-label="{{ __('filum::filum.conversation.reply') }}"
+                                    title="{{ __('filum::filum.conversation.reply') }}"
+                                >
+                                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                        <path d="M8 6.5 4 10l4 3.5" stroke-linecap="round" stroke-linejoin="round" />
+                                        <path d="M4 10h7a5 5 0 0 1 5 5v1" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                </button>
 
                                 <button
                                     type="button"
@@ -193,5 +280,18 @@
                 @php($previousSender = $message->sender_id)
             @endforeach
         </ol>
+
+        {{--
+            Keyed on the newest message, so Livewire replaces this node whenever
+            one arrives and x-init runs again. Nothing else in the thread changes
+            identity when a message lands, which is why the follow-the-foot
+            behaviour hangs off a marker rather than off the list itself.
+        --}}
+        <div
+            class="filum-foot"
+            wire:key="filum-foot-{{ $thread->last()?->id }}"
+            x-init="$nextTick(() => { if (stick) foot() })"
+            aria-hidden="true"
+        ></div>
     @endif
 </div>

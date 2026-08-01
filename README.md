@@ -214,6 +214,39 @@ send into it or leave it while it is off, and every group action is refused. Not
 feature that half-works underneath a switched-off UI. Nothing is deleted, so
 switching it back on restores what was there.
 
+## Replies and files
+
+Any message can answer another. Hover a message, hit reply, and the composer
+shows what you are answering until you send or cancel it. The answer carries a
+one-line quote rather than a link — jumping the log to the parent would move the
+reader away from the line they were on.
+
+A reply may only point at something in the same conversation. Deleting the
+message that was answered leaves the answer standing and drops only its quote.
+
+Messages can also carry files, or be nothing but files — no need to type "here"
+above every document.
+
+```php
+'attachments' => [
+    'enabled' => env('FILUM_ATTACHMENTS', true),
+    'disk' => env('FILUM_ATTACHMENTS_DISK', 'local'),
+    'max_size' => 10240,        // kilobytes
+    'max_per_message' => 4,
+    'mimes' => ['image/png', 'application/pdf', /* … */],
+],
+```
+
+**Keep that disk private.** Files are served back through a panel route that
+checks conversation membership on every request, never linked to directly — a
+public URL would make every document somebody sends readable by anyone who
+guessed the path. `local` is private; `public` is not. The route answers 404
+rather than 403 throughout, because whether a given file exists is itself
+something only a participant should learn.
+
+The accepted type is read from the file's own bytes, not from what the browser
+claimed, so renaming a script to `.png` does not get it past the allowlist.
+
 ## Reactions
 
 Any message can carry emoji reactions. They are a toggle — tapping the same emoji

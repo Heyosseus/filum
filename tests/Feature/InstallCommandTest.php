@@ -59,6 +59,15 @@ it('publishes only the reactions migration under its own tag, still date stamped
         ->and($published[0])->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_create_filum_reactions_table\.php$/');
 });
 
+it('publishes only the replies and attachments migration under its own tag', function (): void {
+    $this->artisan('vendor:publish', ['--tag' => 'filum-migrations-replies'])->assertSuccessful();
+
+    $published = array_map(basename(...), File::glob(database_path('migrations/*.php')));
+
+    expect($published)->toHaveCount(1)
+        ->and($published[0])->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_add_replies_and_attachments_to_filum_tables\.php$/');
+});
+
 it('can be run again with force', function (): void {
     $this->artisan('filum:install')->assertSuccessful();
     $this->artisan('filum:install', ['--force' => true])->assertSuccessful();

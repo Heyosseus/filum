@@ -6,7 +6,9 @@ namespace Heyosseus\Filum;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Heyosseus\Filum\Http\DownloadAttachment;
 use Heyosseus\Filum\Pages\Chat;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Filum, added to a Filament panel.
@@ -34,6 +36,16 @@ final class FilumPlugin implements Plugin
         }
 
         $panel->pages([Chat::class]);
+
+        // A panel route rather than a web one, deliberately. Inside the panel the
+        // request carries the panel's own guard and tenant, so Filum resolves the
+        // same "who is asking" here as it does in the chat itself -- which is the
+        // whole basis on which the file is handed over or withheld.
+        $panel->routes(static function (): void {
+            Route::get('filum/attachments/{attachment}', DownloadAttachment::class)
+                ->name('filum.attachment')
+                ->whereNumber('attachment');
+        });
     }
 
     public function boot(Panel $panel): void

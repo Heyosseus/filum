@@ -13,6 +13,7 @@ use Heyosseus\Filum\Conversations\Conversations;
 use Heyosseus\Filum\Exceptions\NotAGroup;
 use Heyosseus\Filum\Exceptions\NotAParticipant;
 use Heyosseus\Filum\Exceptions\RateLimited;
+use Heyosseus\Filum\Models\Attachment;
 use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
 use Heyosseus\Filum\Models\Participant;
@@ -50,8 +51,16 @@ final readonly class Messages
      * @throws NotAGroup when the conversation is a group and groups are switched off.
      * @throws RateLimited when the sender is sending too fast.
      */
-    public function send(Conversation $conversation, Authenticatable $sender, string $body): Message
-    {
+    /**
+     * @param  list<array{disk: string, path: string, name: string, mime: string, size: int}>  $attachments
+     */
+    public function send(
+        Conversation $conversation,
+        Authenticatable $sender,
+        string $body,
+        ?int $replyToId = null,
+        array $attachments = [],
+    ): Message {
         $senderId = $this->users->id($sender);
 
         // Groups switched off means absent, and absent has to include the send path:
@@ -66,16 +75,24 @@ final readonly class Messages
             throw NotAParticipant::of($conversation->id);
         }
 
-        $body = $this->clean($body);
+        // A file is a message. Requiring words alongside it would mean typing
+        // "here" above every document somebody sends.
+        $body = $this->clean($body, $attachments !== []);
+        $replyToId = $this->replyTarget($conversation, $replyToId);
 
         $this->rateLimit($senderId);
 
-        $message = DB::transaction(function () use ($conversation, $senderId, $body): Message {
+        $message = DB::transaction(function () use ($conversation, $senderId, $body, $replyToId, $attachments): Message {
             $message = Message::query()->create([
                 'conversation_id' => $conversation->id,
                 'sender_id' => $senderId,
+                'reply_to_id' => $replyToId,
                 'body' => $body,
             ]);
+
+            foreach ($attachments as $attachment) {
+                Attachment::query()->create([...$attachment, 'message_id' => $message->id, 'user_id' => $senderId]);
+            }
 
             $conversation->forceFill(['last_message_at' => CarbonImmutable::now()])->save();
 
@@ -92,6 +109,25 @@ final readonly class Messages
         $this->notify($message, $conversation, $senderId);
 
         return $message;
+    }
+
+    /**
+     * The message a reply answers, or null.
+     *
+     * A reply may only point at something in the same conversation. The id comes
+     * from the browser, so pointing it elsewhere would otherwise quote a message
+     * the reader is not allowed to see -- straight into a thread they are.
+     */
+    private function replyTarget(Conversation $conversation, ?int $replyToId): ?int
+    {
+        if ($replyToId === null) {
+            return null;
+        }
+
+        return Message::query()
+            ->where('id', $replyToId)
+            ->where('conversation_id', $conversation->id)
+            ->exists() ? $replyToId : null;
     }
 
     /**
@@ -325,11 +361,11 @@ final readonly class Messages
     /**
      * Trim and bound the body. An empty message is not a message.
      */
-    private function clean(string $body): string
+    private function clean(string $body, bool $carriesFiles = false): string
     {
         $body = trim($body);
 
-        if ($body === '') {
+        if ($body === '' && ! $carriesFiles) {
             throw new InvalidArgumentException('A message cannot be empty.');
         }
 
