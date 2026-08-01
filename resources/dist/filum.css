@@ -861,25 +861,46 @@
 /* Replies and files --------------------------------------------------------- */
 
 /*
- * A quote sits above the answer, marked by a rail rather than by quotation
- * marks: the ledger already reads as a column of rails, so this one joins a
- * pattern instead of introducing punctuation.
+ * One mark means "this answers that", and it appears in exactly two places: the
+ * quote above an answer, and the strip above the composer while you write one.
+ * Two places, one glyph, no boxes -- which is what lets the quote sit inside an
+ * own-message without a second rail running down beside the accent one.
  */
+
 .filum-quote {
     display: flex;
     align-items: baseline;
     gap: 0.375rem;
-    margin-bottom: 0.25rem;
-    padding-inline-start: 0.5rem;
-    border-inline-start: 2px solid var(--filum-hairline);
+    margin-bottom: 0.1875rem;
     color: var(--filum-whisper);
     font-size: 0.75rem;
 }
 
+.filum-quote::before {
+    content: '\21B3';
+}
+
+/* The ledger draws its mark, the composer carries one in the markup for the
+   screen reader to skip -- both land on the same glyph at the same weight. */
+.filum-quote::before,
+.filum-replying-mark {
+    flex: none;
+    color: color-mix(in oklab, var(--filum-whisper) 70%, transparent);
+    font-size: 0.8125rem;
+    line-height: 1;
+}
+
+.filum-replying-mark {
+    color: color-mix(in oklab, var(--filum-signal) 80%, transparent);
+}
+
+/* The author reads as the eyebrow it is, one step quieter than a sender name. */
 .filum-quote-who {
     flex: 0 0 auto;
+    font-size: 0.6875rem;
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .filum-quote-what {
@@ -887,38 +908,47 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    opacity: 0.85;
 }
 
-/* Files on a sent message */
+/* Files ---------------------------------------------------------------------- */
 
 .filum-files {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-end;
     gap: 0.375rem;
-    margin-top: 0.375rem;
+    margin-top: 0.4375rem;
 }
 
+/*
+ * Rectangular, not a pill: a reaction is a tally and a file is a thing. The size
+ * sits at the trailing edge in the same tabular face the time gutter uses, so
+ * numbers line up down a column of files exactly as times do down the thread.
+ */
 .filum-file {
     display: inline-flex;
     align-items: center;
-    gap: 0.4375rem;
-    max-width: 100%;
-    padding: 0.3125rem 0.625rem;
-    background: color-mix(in oklab, var(--filum-text) 6%, transparent);
+    gap: 0.5rem;
+    max-width: min(20rem, 100%);
+    padding: 0.375rem 0.5rem;
+    background: color-mix(in oklab, var(--filum-text) 5%, transparent);
     border: 1px solid var(--filum-hairline);
     border-radius: var(--filum-radius-sm);
     color: inherit;
     font-size: 0.8125rem;
     text-decoration: none;
+    transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .filum-file:hover {
-    background: color-mix(in oklab, var(--filum-text) 11%, transparent);
+    background: color-mix(in oklab, var(--filum-text) 9%, transparent);
+    border-color: color-mix(in oklab, var(--filum-signal) 40%, transparent);
 }
 
 .filum-file svg {
-    width: 1rem;
-    height: 1rem;
+    width: 1.125rem;
+    height: 1.125rem;
     flex: none;
     color: var(--filum-whisper);
 }
@@ -938,54 +968,43 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* An image is its own preview -- a filename tells you nothing a thumbnail does not. */
+/*
+ * A contact sheet, not a gallery: images share one height and let width fall
+ * where it may, so a row of them aligns along the bottom however differently
+ * they were shot. Sizing by width instead would leave a ragged edge.
+ */
 .filum-file-image {
     padding: 0;
+    max-width: none;
     border-radius: var(--filum-radius-sm);
     overflow: hidden;
+    line-height: 0;
 }
 
 .filum-file-image img {
     display: block;
-    max-width: 13rem;
-    max-height: 9rem;
+    height: 6.5rem;
+    width: auto;
+    max-width: 14rem;
     object-fit: cover;
 }
 
-/* Composer: what is being answered, and what is about to go with it */
+/* Composer ------------------------------------------------------------------- */
 
-.filum-replying,
-.filum-picked {
+/*
+ * The two trays are deliberately unalike, because they answer different
+ * questions. What you are answering is tinted with the accent and carries the
+ * same mark the quote does. What is about to go with the message is shown as the
+ * very chips it will become, so the composer previews its own outcome.
+ */
+.filum-replying {
     flex: 1 0 100%;
     display: flex;
-    align-items: center;
-    gap: 0.4375rem;
-    margin: 0 0 0.4375rem;
-    padding: 0.3125rem 0.5rem;
-    background: color-mix(in oklab, var(--filum-signal) 9%, transparent);
-    border-inline-start: 2px solid var(--filum-signal);
-    border-radius: 0 var(--filum-radius-sm) var(--filum-radius-sm) 0;
-    color: var(--filum-whisper);
-    font-size: 0.75rem;
-    list-style: none;
-}
-
-.filum-picked {
-    flex-wrap: wrap;
-    background: color-mix(in oklab, var(--filum-text) 5%, transparent);
-    border-inline-start-color: var(--filum-hairline);
-}
-
-.filum-picked li {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3125rem;
-    max-width: 100%;
-}
-
-.filum-replying-mark {
-    flex: none;
+    align-items: baseline;
+    gap: 0.375rem;
+    margin-bottom: 0.4375rem;
     color: var(--filum-signal);
+    font-size: 0.75rem;
 }
 
 .filum-replying-what {
@@ -993,11 +1012,34 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--filum-whisper);
 }
 
 .filum-replying-what em {
     color: var(--filum-text);
     font-style: normal;
+}
+
+.filum-picked {
+    flex: 1 0 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin: 0 0 0.4375rem;
+    padding: 0;
+    list-style: none;
+}
+
+.filum-picked li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    max-width: min(16rem, 100%);
+    padding: 0.3125rem 0.375rem 0.3125rem 0.5rem;
+    background: color-mix(in oklab, var(--filum-text) 5%, transparent);
+    border: 1px dashed var(--filum-hairline);
+    border-radius: var(--filum-radius-sm);
+    font-size: 0.75rem;
 }
 
 .filum-picked-name {
@@ -1010,6 +1052,8 @@
 .filum-replying-drop,
 .filum-picked button {
     flex: none;
+    display: grid;
+    place-items: center;
     width: 1.125rem;
     height: 1.125rem;
     padding: 0;
@@ -1019,7 +1063,7 @@
     color: var(--filum-whisper);
     cursor: pointer;
     font: inherit;
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
     line-height: 1;
 }
 
@@ -1029,23 +1073,24 @@
     color: var(--filum-text);
 }
 
-/* The paperclip */
-
+/*
+ * Borderless, and the same height as Send. Two outlined boxes side by side would
+ * read as two equal choices, and attaching a file is not equal to sending.
+ */
 .filum-attach {
     position: relative;
     display: grid;
     place-items: center;
-    width: 2.125rem;
-    height: 2.125rem;
+    width: 2rem;
+    height: 2rem;
     flex: none;
-    border: 1px solid var(--filum-hairline);
     border-radius: var(--filum-radius-sm);
     color: var(--filum-whisper);
     cursor: pointer;
 }
 
 .filum-attach:hover {
-    background: color-mix(in oklab, var(--filum-text) 6%, transparent);
+    background: color-mix(in oklab, var(--filum-text) 8%, transparent);
     color: var(--filum-text);
 }
 
@@ -1066,11 +1111,11 @@
     height: 1.125rem;
 }
 
-/* Upload in flight: the control says so rather than looking broken. */
+/* Upload in flight: the control says so rather than looking inert. */
 .filum-attach-busy {
     position: absolute;
-    inset-block-end: 0.1875rem;
-    inset-inline-end: 0.1875rem;
+    inset-block-end: 0.125rem;
+    inset-inline-end: 0.125rem;
     width: 0.375rem;
     height: 0.375rem;
     border-radius: 9999px;
@@ -1079,10 +1124,14 @@
 }
 
 @keyframes filum-pulse {
-    50% { opacity: 0.25; }
+    50% { opacity: 0.2; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .filum-file {
+        transition: none;
+    }
+
     .filum-attach-busy {
         animation: none;
     }
