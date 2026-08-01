@@ -26,7 +26,10 @@ final readonly class DownloadAttachment
     public function __invoke(int $attachment): Response|StreamedResponse
     {
         $user = Filum::user();
-        $file = Attachment::query()->find($attachment);
+        // The message and its conversation are what authorization turns on, so
+        // they are asked for by name rather than reached for afterwards -- an
+        // application running preventLazyLoading would refuse the reach.
+        $file = Attachment::query()->with('message.conversation')->find($attachment);
 
         if (! Filum::authorized($user) || ! $user instanceof Authenticatable || ! $file instanceof Attachment) {
             abort(404);

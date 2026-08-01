@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1]
+
+### Fixed
+
+- The thread lazy loaded each message's reply and its files while rendering: one
+  query per message for the quote, another for the attachments. In an application
+  running `Model::preventLazyLoading()` -- the posture of a careful one -- that is
+  not a slow thread but a thrown `LazyLoadingViolationException`, and the chat
+  would not render at all. Both are eager loaded now, and so is the message and
+  conversation the attachment download authorises against.
+- `tests/TestCase.php` forbids lazy loading, so the suite fails on this class of
+  bug rather than leaving a consumer to find it. It was a consumer that found this
+  one.
+
 ## [0.4.0]
 
 ### Added
