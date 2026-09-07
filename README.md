@@ -319,7 +319,7 @@ written before it are left readable, and one command converts them when you are
 ready — after a backup:
 
 ```bash
-php artisan vendor:publish --tag=filum-migrations-encryption   # 0.4.x → 0.5.0
+php artisan vendor:publish --tag=filum-migrations-encryption   # 0.4.x → 1.0.0
 php artisan migrate
 php artisan filum:encrypt-messages
 ```
