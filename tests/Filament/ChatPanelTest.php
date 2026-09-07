@@ -52,7 +52,7 @@ it('sends a message and clears the composer', function (): void {
         ->assertSet('body', '')
         ->assertSee('გამარჯობა');
 
-    expect(Message::query()->where('body', 'გამარჯობა')->exists())->toBeTrue();
+    expect(wrote('გამარჯობა'))->toBeTrue();
 });
 
 it('shows an error instead of throwing when the composer is empty', function (): void {

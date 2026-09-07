@@ -11,6 +11,7 @@ use Heyosseus\Filum\Contracts\UserProvider;
 use Heyosseus\Filum\Models\Conversation;
 use Heyosseus\Filum\Models\Message;
 use Heyosseus\Filum\Pages\Chat;
+use Heyosseus\Filum\Support\EncryptedBody;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Builder;
@@ -52,7 +53,7 @@ final class DatabaseNotifier implements Notifier
 
         $this->ring(
             $sender instanceof Authenticatable ? $this->users->name($sender) : '',
-            $this->excerpt($message->body),
+            $this->preview($message),
             'heroicon-o-chat-bubble-left-ellipsis',
             $recipient,
         );
@@ -97,6 +98,25 @@ final class DatabaseNotifier implements Notifier
         }
 
         return $this->hasTable ??= $this->schema->hasTable('notifications');
+    }
+
+    /**
+     * What the bell says the message was.
+     *
+     * Encrypted messages are announced without their words. Filament's bell
+     * writes into the application's notifications table, which is plaintext, is
+     * frequently replicated, and is read by every part of the panel that renders
+     * a bell -- so an excerpt there would hand back in clear exactly what the
+     * column beside it went to the trouble of hiding, for every message anyone
+     * did not happen to be looking at.
+     */
+    private function preview(Message $message): string
+    {
+        if (EncryptedBody::enabled()) {
+            return (string) __('filum::filum.notification.message_body');
+        }
+
+        return $this->excerpt($message->body);
     }
 
     /**

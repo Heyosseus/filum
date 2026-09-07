@@ -6,7 +6,6 @@ use Heyosseus\Filum\Groups\Groups;
 use Heyosseus\Filum\Livewire\ChatPanel;
 use Heyosseus\Filum\Messages\Messages;
 use Heyosseus\Filum\Models\Conversation;
-use Heyosseus\Filum\Models\Message;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -393,7 +392,7 @@ it('makes an open group absent when groups are switched off underneath it', func
         ->assertHasNoErrors();
 
     // Nothing written, and nobody's membership quietly altered on the way past.
-    expect(Message::query()->where('body', 'anybody there?')->exists())->toBeFalse()
+    expect(wrote('anybody there?'))->toBeFalse()
         ->and($group->fresh()?->includes($this->nino->id))->toBeTrue();
 });
 
@@ -409,7 +408,7 @@ it('leaves a direct conversation entirely alone when groups are switched off', f
         ->assertHasNoErrors()
         ->assertSee('the float is under the till');
 
-    expect(Message::query()->where('body', 'the float is under the till')->exists())->toBeTrue();
+    expect(wrote('the float is under the till'))->toBeTrue();
 });
 
 it('creates nothing for a viewer it will not admit', function (): void {

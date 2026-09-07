@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Message bodies are encrypted at rest.** They were stored as plain strings, so
+  a database dump, a read replica, a backup tape or a read-only reporting login
+  handed over everyone's correspondence in the clear. Encryption is a cast on the
+  column rather than a step in the send path, because a body reaches that column
+  by more than one road -- the sender, a seeder, an application's own
+  `Message::create` -- and a rule enforced at one of them is not a rule. Nothing
+  in the panel changes: replies still quote, scrollback still pages.
+- `filum.messages.encrypt`, on by default. Turning it off changes only what is
+  *written*: anything already encrypted stays readable, because a switch that
+  could orphan the archive would not be a switch.
+- `php artisan filum:encrypt-messages` converts an existing plaintext archive.
+  Switching encryption on leaves older rows readable and this command rewrites
+  them, so the moment the archive changes is a moment the operator chose and
+  could take a backup before. Safe to run twice, and an interrupted run is
+  resumed by running it again.
+- A migration widening `filum_messages.body` to `LONGTEXT`, published under
+  `filum-migrations-encryption`. Ciphertext is roughly twice the size of what went
+  in and MySQL's `TEXT` stops at 65,535 bytes; a message that sends fine today
+  must not start failing to insert the day encryption is switched on.
+
+### Changed
+
+- **The notification bell no longer quotes an encrypted message.** Filament's
+  bell writes into the application's own `notifications` table, which is
+  plaintext and frequently replicated somewhere less careful -- an excerpt there
+  handed back in clear exactly what the column beside it had just hidden, for
+  every message nobody happened to be looking at. While messages are encrypted an
+  unread one rings as *Sent you a message*; with encryption off the excerpt is
+  unchanged.
+- Message bodies can no longer be matched in SQL. `where('body', ...)`, `LIKE`
+  scans and full-text indexes over the column stop working, in Filum and in
+  consumer code. There is no message search in Filum to break, and colleague
+  search is unaffected, but a consumer reaching into the column directly will
+  need to read through the model.
+
+### Fixed
+
+- A body that will not decrypt -- a rotated `APP_KEY`, a row copied in from
+  another application -- costs one unreadable line and a warning in the log
+  rather than a five-hundred on the whole thread.
+
 ## [0.4.1]
 
 ### Fixed

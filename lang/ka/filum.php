@@ -58,6 +58,7 @@ return [
         'sent_at' => 'გაგზავნილია :time',
         'today' => 'დღეს',
         'yesterday' => 'გუშინ',
+        'unreadable' => 'ამ შეტყობინების წაკითხვა ვერ მოხერხდა.',
     ],
 
     'composer' => [
@@ -74,6 +75,7 @@ return [
     'notification' => [
         'open' => 'ჩათის გახსნა',
         'invited_body' => 'მოგიწვიათ ჯგუფში :group',
+        'message_body' => 'გამოგიგზავნათ შეტყობინება',
     ],
 
     'reactions' => [
@@ -90,6 +92,11 @@ return [
     'errors' => [
         'not_participant' => 'თქვენ არ ხართ ამ საუბრის მონაწილე.',
         'missing_tables' => 'Filum-ის ცხრილები ვერ მოიძებნა. გაუშვით: php artisan vendor:publish --tag=filum-migrations && php artisan migrate',
+    ],
+
+    'encrypt' => [
+        'disabled' => 'შეტყობინებების დაშიფვრა გამორთულია. ჯერ ჩართეთ filum.messages.encrypt.',
+        'done' => 'დაშიფრულია :count შეტყობინება.',
     ],
 
     'install' => [

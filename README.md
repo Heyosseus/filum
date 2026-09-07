@@ -271,6 +271,68 @@ acknowledgement, not a message, and an entry for each one would bury the entries
 that matter. They appear for everyone looking at the thread on the next tick,
 with or without a broadcaster.
 
+## Encryption
+
+Message bodies are encrypted at rest with your application key. A database dump,
+a read replica, a backup tape or the read-only reporting login somebody was given
+last year is ciphertext rather than everyone's correspondence — which for a back
+office is often the most sensitive column it has, and the one nobody thinks of as
+a column at all.
+
+```php
+'messages' => [
+    'max_length' => 2000,
+    'per_page' => 50,
+    'rate_limit' => 30,
+    'rate_window' => 60,
+    'encrypt' => env('FILUM_ENCRYPT_MESSAGES', true),
+],
+```
+
+It is on by default and there is nothing to do to get it. Nothing in the panel
+changes: replies still quote, scrollback still pages, and search still finds
+colleagues.
+
+**What it costs you is SQL over the column.** `where('body', ...)`, a `LIKE`
+scan, a full-text index, a report that counts how often a word appears — none of
+those can work on ciphertext, in Filum or in your own code. If full-text search
+over chat matters more to you than the column being unreadable, this is the
+switch you are trading it against.
+
+**The bell stops quoting.** Filament's notification bell writes into your
+application's `notifications` table, which is plaintext and frequently replicated
+somewhere less careful. So while messages are encrypted an unread one rings as
+*Sent you a message* rather than with an excerpt — copying the first hundred and
+twenty characters into the next table over would undo the encryption for every
+message anybody did not happen to be looking at.
+
+**Your `APP_KEY` becomes the key to the archive.** Rotate it the way Laravel
+documents, keeping the old one in `APP_PREVIOUS_KEYS`, or the messages go with
+it. A body that will not decrypt costs one line reading *This message could not
+be read.* and a warning in the log, rather than a chat panel that five-hundreds
+on the four hundred messages around it.
+
+### Converting an existing install
+
+Switching encryption on does not rewrite your history behind your back. Rows
+written before it are left readable, and one command converts them when you are
+ready — after a backup:
+
+```bash
+php artisan vendor:publish --tag=filum-migrations-encryption   # 0.4.x → 0.5.0
+php artisan migrate
+php artisan filum:encrypt-messages
+```
+
+The migration widens `body` to `LONGTEXT`, because ciphertext is roughly twice
+the size of what went in and MySQL's `TEXT` stops at 65,535 bytes. The command is
+safe to run twice and skips anything already encrypted, so an interrupted run is
+resumed by running it again.
+
+Turning encryption back off changes only what is *written*. Everything already
+encrypted stays readable, because a switch that could orphan the archive would
+not be a switch.
+
 ## Presence
 
 The sidebar shows who is around. A heartbeat writes `last_seen_at` on an

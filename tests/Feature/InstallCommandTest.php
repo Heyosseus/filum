@@ -68,6 +68,15 @@ it('publishes only the replies and attachments migration under its own tag', fun
         ->and($published[0])->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_add_replies_and_attachments_to_filum_tables\.php$/');
 });
 
+it('publishes only the encryption migration under its own tag', function (): void {
+    $this->artisan('vendor:publish', ['--tag' => 'filum-migrations-encryption'])->assertSuccessful();
+
+    $published = array_map(basename(...), File::glob(database_path('migrations/*.php')));
+
+    expect($published)->toHaveCount(1)
+        ->and($published[0])->toMatch('/^\d{4}_\d{2}_\d{2}_\d{6}_widen_filum_message_bodies\.php$/');
+});
+
 it('can be run again with force', function (): void {
     $this->artisan('filum:install')->assertSuccessful();
     $this->artisan('filum:install', ['--force' => true])->assertSuccessful();

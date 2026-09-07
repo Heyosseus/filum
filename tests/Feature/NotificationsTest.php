@@ -27,7 +27,23 @@ it('rings the bell for the recipient and not for the sender', function (): void 
         ->and(bell($this->nino->id))->toBeEmpty();
 });
 
-it('names the sender and quotes what they said', function (): void {
+it('names the sender without repeating an encrypted message in the clear', function (): void {
+    app(Messages::class)->send($this->conversation, $this->nino, 'the invoice is on your desk');
+
+    $notification = bell($this->giorgi->id)[0];
+
+    // The notifications table is the application's, plaintext and often
+    // replicated. An excerpt there would hand back exactly what the column beside
+    // it went to the trouble of hiding.
+    expect($notification['title'])->toBe('Nino')
+        ->and($notification['body'])->toBe('Sent you a message')
+        ->and(DB::table('notifications')->pluck('data')->implode(' '))
+        ->not->toContain('the invoice is on your desk');
+});
+
+it('quotes what they said when messages are not encrypted', function (): void {
+    config()->set('filum.messages.encrypt', false);
+
     app(Messages::class)->send($this->conversation, $this->nino, 'the invoice is on your desk');
 
     $notification = bell($this->giorgi->id)[0];
@@ -37,6 +53,8 @@ it('names the sender and quotes what they said', function (): void {
 });
 
 it('shortens a long message to one line', function (): void {
+    config()->set('filum.messages.encrypt', false);
+
     app(Messages::class)->send($this->conversation, $this->nino, "line one\n\n     line two ".str_repeat('a', 200));
 
     $body = (string) bell($this->giorgi->id)[0]['body'];

@@ -53,6 +53,7 @@ return [
         'replying_to' => 'Replying to',
         'you' => 'You',
         'sent_at' => 'Sent :time',
+        'unreadable' => 'This message could not be read.',
         'today' => 'Today',
         'yesterday' => 'Yesterday',
     ],
@@ -71,6 +72,7 @@ return [
     'notification' => [
         'open' => 'Open chat',
         'invited_body' => 'Invited you to :group',
+        'message_body' => 'Sent you a message',
     ],
 
     'reactions' => [
@@ -87,6 +89,11 @@ return [
     'errors' => [
         'not_participant' => 'You are not part of this conversation.',
         'missing_tables' => "Filum's tables are missing. Run: php artisan vendor:publish --tag=filum-migrations && php artisan migrate",
+    ],
+
+    'encrypt' => [
+        'disabled' => 'Message encryption is switched off. Set filum.messages.encrypt to true first.',
+        'done' => 'Encrypted :count message bodies.',
     ],
 
     'install' => [
