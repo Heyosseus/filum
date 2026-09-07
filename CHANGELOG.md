@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0]
+
+The first stable release. What is covered by semantic versioning from here: the
+`Notifier`, `PresenceStore`, `Transport` and `UserProvider` contracts, the
+`Filum` and `FilumPlugin` facades, the Eloquent models and their relations, the
+`filum.*` configuration keys, the published migration tags, the Blade views and
+the `filum-` CSS class names. Anything under `Support\Compat`, which exists only
+to paper over the difference between Filament 4 and 5, is not.
+
 ### Added
 
 - **Message bodies are encrypted at rest.** They were stored as plain strings, so
