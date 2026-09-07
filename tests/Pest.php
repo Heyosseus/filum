@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Heyosseus\Filum\Models\Message;
 use Heyosseus\Filum\Tests\DisabledTestCase;
 use Heyosseus\Filum\Tests\FilamentTestCase;
 use Heyosseus\Filum\Tests\NoOverlayTestCase;
@@ -39,4 +40,20 @@ function bell(int|string $userId): array
             return $data;
         })
         ->all();
+}
+
+/**
+ * Whether any stored message reads as the given body.
+ *
+ * Read through the model rather than matched with a where() on the column:
+ * bodies are encrypted at rest, so no SQL comparison can find one -- and a test
+ * that still could would be asserting against a database Filum no longer writes.
+ *
+ * @param  string  $body  the plaintext to look for
+ */
+function wrote(string $body): bool
+{
+    return Message::query()->get()->contains(
+        static fn (Message $message): bool => $message->body === $body,
+    );
 }

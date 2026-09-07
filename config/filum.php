@@ -90,6 +90,20 @@ return [
     |
     | The rate limit is per sender, counted over the given window in seconds.
     |
+    | Bodies are encrypted at rest with your application key, so a database dump,
+    | a replica, a backup tape or a read-only reporting login is ciphertext rather
+    | than everyone's correspondence. It costs you the ability to grep the column
+    | or search messages in SQL -- if you need full-text search over chat, this is
+    | the switch you are trading it against.
+    |
+    | Turning it off only changes what is *written*: anything already encrypted
+    | stays readable, because a switch that could orphan the archive would not be
+    | a switch. Turning it on leaves older plaintext rows readable too, until
+    | `php artisan filum:encrypt-messages` converts them.
+    |
+    | Your APP_KEY becomes the key to the archive. Rotate it the way Laravel
+    | documents -- old keys in APP_PREVIOUS_KEYS -- or the messages go with it.
+    |
     */
 
     'messages' => [
@@ -97,6 +111,7 @@ return [
         'per_page' => 50,
         'rate_limit' => 30,
         'rate_window' => 60,
+        'encrypt' => env('FILUM_ENCRYPT_MESSAGES', true),
     ],
 
     /*
@@ -112,6 +127,12 @@ return [
     | to behind. A busy thread therefore rings once rather than forty times, and
     | rings again once they have caught up. Where the table has never been
     | migrated, or the user model is not notifiable, this quietly does nothing.
+    |
+    | The bell shows who wrote, and shows *what* they wrote only when messages are
+    | not encrypted. The notifications table is the application's, unencrypted and
+    | often replicated to somewhere less careful; copying an excerpt into it would
+    | undo the encryption for the first hundred and twenty characters of every
+    | message anyone did not read straight away.
     |
     */
 

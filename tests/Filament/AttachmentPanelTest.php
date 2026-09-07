@@ -32,7 +32,10 @@ it('answers a message from the thread and shows what is being answered', functio
         ->call('send')
         ->assertSet('replyTo', null);
 
-    expect(Message::query()->where('body', 'on your desk')->value('reply_to_id'))->toBe($this->asked->id);
+    $answer = Message::query()->orderByDesc('id')->firstOrFail();
+
+    expect($answer->body)->toBe('on your desk')
+        ->and($answer->reply_to_id)->toBe($this->asked->id);
 });
 
 it('drops the answer when it is cancelled', function (): void {
@@ -104,7 +107,7 @@ it('shows the refusal against the field rather than throwing', function (): void
         ->call('send')
         ->assertHasErrors('files');
 
-    expect(Message::query()->where('body', 'too big')->exists())->toBeFalse();
+    expect(wrote('too big'))->toBeFalse();
 });
 
 it('drops a picked file before it is sent', function (): void {

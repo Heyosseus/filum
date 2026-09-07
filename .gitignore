@@ -8,3 +8,4 @@ composer.lock
 .php-cs-fixer.cache
 .DS_Store
 Thumbs.db
+.env

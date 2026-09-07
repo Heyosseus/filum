@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Heyosseus\Filum\Models;
 
+use Heyosseus\Filum\Support\EncryptedBody;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Override;
 
 /**
  * @property int $id
@@ -47,5 +49,22 @@ final class Message extends Model
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);
+    }
+
+    /**
+     * The body is encrypted at rest, and the cast is the only thing that knows.
+     *
+     * Put on the model rather than left to the send path because a body reaches
+     * this column by more than one road; see EncryptedBody for why reading it is
+     * more forgiving than writing it.
+     *
+     * @return array<string, class-string>
+     */
+    #[Override]
+    protected function casts(): array
+    {
+        return [
+            'body' => EncryptedBody::class,
+        ];
     }
 }

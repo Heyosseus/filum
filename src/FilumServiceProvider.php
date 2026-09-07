@@ -7,6 +7,7 @@ namespace Heyosseus\Filum;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentView;
+use Heyosseus\Filum\Console\Commands\EncryptMessagesCommand;
 use Heyosseus\Filum\Console\Commands\InstallCommand;
 use Heyosseus\Filum\Contracts\Notifier;
 use Heyosseus\Filum\Contracts\PresenceStore;
@@ -83,7 +84,7 @@ final class FilumServiceProvider extends ServiceProvider
         $this->registerAssets();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([InstallCommand::class]);
+            $this->commands([InstallCommand::class, EncryptMessagesCommand::class]);
 
             $this->publishes([
                 __DIR__.'/../config/filum.php' => $this->app->configPath('filum.php'),
@@ -117,6 +118,10 @@ final class FilumServiceProvider extends ServiceProvider
             $this->publishesMigrations([
                 __DIR__.'/../database/migrations/2026_08_01_000000_add_replies_and_attachments_to_filum_tables.php' => $this->app->databasePath('migrations/2026_08_01_000000_add_replies_and_attachments_to_filum_tables.php'),
             ], 'filum-migrations-replies');
+
+            $this->publishesMigrations([
+                __DIR__.'/../database/migrations/2026_09_07_000000_widen_filum_message_bodies.php' => $this->app->databasePath('migrations/2026_09_07_000000_widen_filum_message_bodies.php'),
+            ], 'filum-migrations-encryption');
 
             $this->publishes([
                 __DIR__.'/../lang' => $this->app->langPath('vendor/filum'),

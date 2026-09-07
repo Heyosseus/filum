@@ -52,7 +52,7 @@ it('keeps the message when the broadcaster is down', function (): void {
     $message = app(Messages::class)->send($this->conversation, $this->nino, 'still here');
 
     expect($message->body)->toBe('still here')
-        ->and(Message::query()->where('body', 'still here')->exists())->toBeTrue();
+        ->and(wrote('still here'))->toBeTrue();
 
     Log::shouldHaveReceived('warning')->once();
 });
